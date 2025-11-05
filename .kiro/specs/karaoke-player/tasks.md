@@ -34,7 +34,7 @@ This implementation plan breaks down the karaoke player design into discrete cod
 
 
 
-- [ ] 2. Implement core data models and database schema
+- [x] 2. Implement core data models and database schema
 
   - Create MediaFile model with properties (id, filePath, filename, type, format, metadata, thumbnailPath, etc.)
   - Create MediaMetadata model (duration, artist, title, album, resolution, fileSize, hasSubtitles)
@@ -58,7 +58,11 @@ This implementation plan breaks down the karaoke player design into discrete cod
   - Wire up settings to ReactiveUI property change notifications
   - _Requirements: 10_
 
-- [ ] 4. Implement Media Library Manager service
+- [x] 4. Implement Media Library Manager service
+
+
+
+
   - Create IMediaLibraryManager interface and MediaLibraryManager implementation
   - Implement scanDirectory to recursively find MP4, MKV, WEBM, MP3 files
   - Store file paths and basic info in SQLite database
