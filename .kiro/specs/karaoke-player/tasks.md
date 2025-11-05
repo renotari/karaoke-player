@@ -72,7 +72,12 @@ This implementation plan breaks down the karaoke player design into discrete cod
   - Add progress reporting for directory scanning
   - _Requirements: 1, 13_
 
-- [ ] 5. Implement Metadata Extractor service
+- [x] 5. Implement Metadata Extractor service
+
+
+
+
+
   - Create IMetadataExtractor interface and MetadataExtractor implementation
   - Integrate TagLib# for MP3 ID3 tag extraction (artist, title, album, artwork)
   - Integrate FFmpeg.NET or MediaInfo.NET for video metadata (duration, resolution, fileSize)
