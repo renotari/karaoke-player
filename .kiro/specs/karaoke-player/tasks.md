@@ -11,15 +11,31 @@ This implementation plan breaks down the karaoke player design into discrete cod
 
 ---
 
-- [ ] 1. Set up project structure and development environment
+- [x] 1. Set up project structure and development environment
+
+
+
+
+
+
   - Initialize .NET 8 solution with Avalonia UI project template
   - Add NuGet packages: LibVLCSharp, LibVLCSharp.Avalonia, Entity Framework Core, SQLite, TagLib#, SkiaSharp, ReactiveUI
   - Configure project for Windows target (primary), with cross-platform structure
   - Set up MVVM folder structure: Models, ViewModels, Views, Services
   - Create basic App.axaml and MainWindow.axaml
   - _Requirements: Foundation for all requirements_
+- [x] 2. Implement core data models and database schema
+
+
+
+
+
+
+
+
 
 - [ ] 2. Implement core data models and database schema
+
   - Create MediaFile model with properties (id, filePath, filename, type, format, metadata, thumbnailPath, etc.)
   - Create MediaMetadata model (duration, artist, title, album, resolution, fileSize, hasSubtitles)
   - Create PlaylistItem model (mediaFile, addedAt, isDuplicate, error)
