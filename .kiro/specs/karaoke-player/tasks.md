@@ -192,7 +192,12 @@ This implementation plan breaks down the karaoke player design into discrete cod
   - Display song title, artist, and artwork as background elements
   - _Requirements: 4, 17_
 
-- [ ] 13. Implement Window Manager service
+- [x] 13. Implement Window Manager service
+
+
+
+
+
   - Create IWindowManager interface and WindowManager implementation
   - Implement setMode to switch between 'single' and 'dual' screen modes
   - Implement openPlaylistComposer to create Playlist Composer window
