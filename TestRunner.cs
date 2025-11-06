@@ -19,6 +19,11 @@ public static class TestRunner
             // Run CacheManager tests
             await CacheManagerTest.RunTests();
 
+            Console.WriteLine();
+
+            // Run SearchEngine tests
+            await SearchEngineTest.RunAllTests();
+
             Console.WriteLine("\n=====================================");
             Console.WriteLine("All tests completed successfully!");
             Console.WriteLine("=====================================\n");

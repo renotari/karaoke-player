@@ -11,6 +11,7 @@ public class KaraokeDbContext : DbContext
     public DbSet<MediaMetadata> MediaMetadata { get; set; } = null!;
     public DbSet<PlaylistItem> PlaylistItems { get; set; } = null!;
     public DbSet<AppSettings> AppSettings { get; set; } = null!;
+    public DbSet<SearchHistory> SearchHistory { get; set; } = null!;
 
     public KaraokeDbContext(DbContextOptions<KaraokeDbContext> options)
         : base(options)
@@ -62,6 +63,13 @@ public class KaraokeDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.DisplayMode).HasConversion<string>();
+        });
+
+        // Configure SearchHistory
+        modelBuilder.Entity<SearchHistory>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.SearchedAt);
         });
     }
 }

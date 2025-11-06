@@ -206,6 +206,25 @@ namespace KaraokePlayer.Models.Migrations
                     b.ToTable("PlaylistItems");
                 });
 
+            modelBuilder.Entity("KaraokePlayer.Models.SearchHistory", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SearchTerm")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SearchedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SearchedAt");
+
+                    b.ToTable("SearchHistory");
+                });
+
             modelBuilder.Entity("KaraokePlayer.Models.MediaMetadata", b =>
                 {
                     b.HasOne("KaraokePlayer.Models.MediaFile", "MediaFile")
