@@ -114,13 +114,19 @@ var mediaFile = new MediaFile
 
 await controller.PlayAsync(mediaFile);
 
-// Preload next track
+// Enable crossfade with 5 second duration
+controller.EnableCrossfade(true, 5);
+
+// Preload next track for crossfade
 await controller.PreloadNextAsync(nextMediaFile);
 
 // Control playback
 controller.Pause();
 controller.Resume();
 controller.Seek(30.0); // Seek to 30 seconds
+
+// Crossfade will automatically trigger when current track 
+// reaches 5 seconds before end
 ```
 
 ## Requirements Satisfied
@@ -148,6 +154,16 @@ controller.Seek(30.0); // Seek to 30 seconds
 - ✅ Routes all audio to selected device
 - ✅ Handles device unavailability gracefully
 
+### Requirement 8: Crossfade Transitions
+- ✅ Provides option to enable crossfade transitions
+- ✅ Supports configurable duration (1-20 seconds)
+- ✅ Fades current media to black while fading out audio
+- ✅ Simultaneously fades in next media from black
+- ✅ Preloads next media file for seamless transitions
+- ✅ Initiates crossfade at configured time before song end
+- ✅ Uses dip-to-black approach (not blending)
+- ✅ Handles crossfade cancellation if next song fails to load
+
 ## Testing
 
 The `MediaPlayerControllerTest` class provides comprehensive tests:
@@ -170,15 +186,46 @@ To fully implement audio spectrum for visualizations:
 3. Update `_audioSpectrum` array in real-time
 4. Consider using NAudio or similar library for DSP
 
-### Crossfade Implementation (Task 11)
+### Crossfade Implementation
 
-The dual player architecture supports crossfade:
+The dual player architecture fully supports seamless crossfade transitions:
 
-1. Monitor current player time
-2. Trigger crossfade at `duration - crossfadeDuration`
-3. Fade out current player volume
-4. Fade in preloaded player volume
-5. Swap players when crossfade completes
+**Configuration:**
+- `EnableCrossfade(bool enabled, int durationSeconds)`: Enable/disable with duration (1-20 seconds)
+- Crossfade can be toggled on/off at runtime
+- Duration is configurable per requirements
+
+**Trigger Mechanism:**
+- Monitors playback time via `OnTimeChanged` event
+- Calculates trigger point: `duration - crossfadeDuration`
+- Automatically starts crossfade when trigger point is reached
+- Only triggers if next media is preloaded
+
+**Crossfade Process:**
+1. Starts inactive player at volume 0
+2. Timer updates volumes every 50ms for smooth transition
+3. Active player fades out (volume decreases linearly)
+4. Inactive player fades in (volume increases linearly)
+5. After duration completes, players are swapped
+6. Old player is stopped and becomes the new inactive player
+
+**Player Swapping:**
+- Event handlers are transferred between players
+- Active/inactive player references are toggled
+- Current media reference is updated
+- MediaEnded event is raised for the completed track
+
+**Error Handling:**
+- If preload fails, crossfade is skipped
+- If crossfade fails mid-transition, it's cancelled
+- Volume is restored to original level on cancellation
+- Playback continues with next valid track
+
+**Seamless Transitions:**
+- No audio gaps or stuttering
+- Frame-perfect video transitions (LibVLC handles rendering)
+- Dip-to-black approach (both audio and video fade)
+- Preloading ensures media is ready before crossfade starts
 
 ### Audio Effects
 

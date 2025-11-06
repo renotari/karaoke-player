@@ -20,6 +20,7 @@ public class MediaPlayerControllerTest
         await TestSubtitleToggle();
         await TestStateManagement();
         await TestPreloading();
+        await TestCrossfade();
 
         Console.WriteLine("\n=== All MediaPlayerController Tests Completed ===");
     }
@@ -203,6 +204,65 @@ public class MediaPlayerControllerTest
         catch (Exception ex)
         {
             Console.WriteLine($"✗ Preloading test failed: {ex.Message}\n");
+        }
+    }
+
+    private static async Task TestCrossfade()
+    {
+        Console.WriteLine("Test: Crossfade");
+        try
+        {
+            using var controller = new MediaPlayerController();
+            
+            // Test default crossfade state
+            Assert(controller.CrossfadeEnabled == false, "Crossfade should be disabled by default");
+            Assert(controller.CrossfadeDuration == 5, "Default crossfade duration should be 5 seconds");
+            
+            // Test enabling crossfade with valid duration
+            controller.EnableCrossfade(true, 10);
+            Assert(controller.CrossfadeEnabled == true, "Crossfade should be enabled");
+            Assert(controller.CrossfadeDuration == 10, "Crossfade duration should be 10 seconds");
+            
+            // Test disabling crossfade
+            controller.EnableCrossfade(false, 5);
+            Assert(controller.CrossfadeEnabled == false, "Crossfade should be disabled");
+            Assert(controller.CrossfadeDuration == 5, "Crossfade duration should be 5 seconds");
+            
+            // Test minimum duration (1 second)
+            controller.EnableCrossfade(true, 1);
+            Assert(controller.CrossfadeDuration == 1, "Crossfade duration should be 1 second");
+            
+            // Test maximum duration (20 seconds)
+            controller.EnableCrossfade(true, 20);
+            Assert(controller.CrossfadeDuration == 20, "Crossfade duration should be 20 seconds");
+            
+            // Test invalid duration (too low)
+            try
+            {
+                controller.EnableCrossfade(true, 0);
+                Console.WriteLine("✗ Should have thrown exception for duration < 1");
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                // Expected
+            }
+            
+            // Test invalid duration (too high)
+            try
+            {
+                controller.EnableCrossfade(true, 21);
+                Console.WriteLine("✗ Should have thrown exception for duration > 20");
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                // Expected
+            }
+            
+            Console.WriteLine("✓ Crossfade test passed\n");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"✗ Crossfade test failed: {ex.Message}\n");
         }
     }
 

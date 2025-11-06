@@ -103,6 +103,23 @@ public interface IMediaPlayerController
     Task PreloadNextAsync(MediaFile mediaFile);
 
     /// <summary>
+    /// Enables or disables crossfade transitions with configurable duration
+    /// </summary>
+    /// <param name="enabled">True to enable crossfade, false to disable</param>
+    /// <param name="durationSeconds">Crossfade duration in seconds (1-20)</param>
+    void EnableCrossfade(bool enabled, int durationSeconds);
+
+    /// <summary>
+    /// Gets whether crossfade is currently enabled
+    /// </summary>
+    bool CrossfadeEnabled { get; }
+
+    /// <summary>
+    /// Gets the current crossfade duration in seconds
+    /// </summary>
+    int CrossfadeDuration { get; }
+
+    /// <summary>
     /// Event raised when playback state changes
     /// </summary>
     event EventHandler<PlaybackStateChangedEventArgs>? StateChanged;
