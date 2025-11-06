@@ -207,7 +207,12 @@ This implementation plan breaks down the karaoke player design into discrete cod
   - Implement state synchronization across windows
   - _Requirements: 5, 6, 12_
 
-- [ ] 14. Create Main Window UI (Single Screen Mode - Normal View)
+- [x] 14. Create Main Window UI (Single Screen Mode - Normal View)
+
+
+
+
+
   - Design MainWindow.axaml with three-pane layout: Catalog, Video, Playlist
   - Implement resizable split panes using Avalonia Grid with GridSplitter
   - Create search bar with real-time filtering in catalog pane

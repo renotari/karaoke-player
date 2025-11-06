@@ -3,25 +3,414 @@
         xmlns:vm="using:KaraokePlayer.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
         x:Class="KaraokePlayer.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Title="Karaoke Player"
         Width="1200"
-        Height="700">
+        Height="700"
+        MinWidth="800"
+        MinHeight="600">
 
     <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <Grid>
-        <TextBlock Text="{Binding Greeting}" 
-                   HorizontalAlignment="Center" 
-                   VerticalAlignment="Center"
-                   FontSize="24"/>
+    <Window.Resources>
+        <vm:PlayPauseConverter x:Key="PlayPauseConverter"/>
+    </Window.Resources>
+
+    <Grid RowDefinitions="Auto,*,Auto,Auto">
+        
+        <!-- Menu Bar -->
+        <Menu Grid.Row="0">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Open Media Directory..." />
+                <MenuItem Header="_Exit" />
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem Header="_Single Screen Mode" />
+                <MenuItem Header="_Dual Screen Mode" />
+                <MenuItem Header="_Fullscreen" />
+            </MenuItem>
+            <MenuItem Header="_Playback">
+                <MenuItem Header="_Play/Pause" />
+                <MenuItem Header="_Stop" />
+                <MenuItem Header="_Next" />
+                <MenuItem Header="_Previous" />
+            </MenuItem>
+            <MenuItem Header="_Settings">
+                <MenuItem Header="_Preferences..." />
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="_About" />
+            </MenuItem>
+        </Menu>
+
+        <!-- Main Content Area with Three Panes -->
+        <Grid Grid.Row="1" ColumnDefinitions="300,5,*,5,300">
+            
+            <!-- Left Pane: Media Catalog with Search -->
+            <Border Grid.Column="0" 
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" 
+                    BorderThickness="0,0,1,0"
+                    Padding="8">
+                <Grid RowDefinitions="Auto,Auto,*">
+                    
+                    <!-- Search Bar -->
+                    <TextBox Grid.Row="0"
+                             Watermark="Search by artist, title, or filename..."
+                             Margin="0,0,0,8"
+                             Text="{Binding SearchQuery, Mode=TwoWay}">
+                        <TextBox.InnerRightContent>
+                            <Button Content="✕" 
+                                    IsVisible="{Binding SearchQuery, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                    Command="{Binding ClearSearchCommand}"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Padding="4"/>
+                        </TextBox.InnerRightContent>
+                    </TextBox>
+
+                    <!-- Catalog Header -->
+                    <TextBlock Grid.Row="1" 
+                               Text="Media Catalog"
+                               FontWeight="Bold"
+                               Margin="0,0,0,8"/>
+
+                    <!-- Media Catalog List with Virtualization -->
+                    <ListBox Grid.Row="2"
+                             ItemsSource="{Binding FilteredMediaFiles}"
+                             SelectedItem="{Binding SelectedMediaFile}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="80,*" 
+                                      Margin="4"
+                                      Background="Transparent">
+                                    
+                                    <!-- Thumbnail -->
+                                    <Border Grid.Column="0" 
+                                            Width="80" 
+                                            Height="60"
+                                            CornerRadius="4"
+                                            ClipToBounds="True"
+                                            Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+                                        <Panel>
+                                            <Image Source="{Binding ThumbnailPath}"
+                                                   Stretch="UniformToFill"
+                                                   IsVisible="{Binding ThumbnailLoaded}"/>
+                                            <TextBlock Text="🎵"
+                                                       FontSize="24"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       IsVisible="{Binding !ThumbnailLoaded}"/>
+                                        </Panel>
+                                    </Border>
+
+                                    <!-- Metadata -->
+                                    <StackPanel Grid.Column="1" 
+                                                Margin="8,0,0,0"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Metadata.Artist}"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   IsVisible="{Binding Metadata.Artist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                        <TextBlock Text="{Binding Metadata.Title}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                                        <TextBlock Text="{Binding Metadata.Duration, StringFormat='{}{0:mm\\:ss}'}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                                    </StackPanel>
+
+                                    <!-- Context Menu -->
+                                    <Grid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Add to Playlist (Next)" 
+                                                      Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).AddToPlaylistNextCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                            <MenuItem Header="Add to Playlist (End)" 
+                                                      Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).AddToPlaylistEndCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                        </ContextMenu>
+                                    </Grid.ContextMenu>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- Grid Splitter (Left) -->
+            <GridSplitter Grid.Column="1" 
+                          ResizeDirection="Columns"
+                          Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"/>
+
+            <!-- Center Pane: Video Output Area -->
+            <Border Grid.Column="2" 
+                    Background="Black"
+                    Padding="0">
+                <Grid>
+                    <!-- Video Player Placeholder -->
+                    <Border Background="Black">
+                        <TextBlock Text="Video Output Area"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="White"
+                                   FontSize="24"
+                                   IsVisible="{Binding !IsPlaying}"/>
+                    </Border>
+
+                    <!-- Maximize Button -->
+                    <Button Content="⛶"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="8"
+                            Padding="8,4"
+                            ToolTip.Tip="Maximize Video"
+                            Background="#80000000"
+                            Foreground="White"/>
+                </Grid>
+            </Border>
+
+            <!-- Grid Splitter (Right) -->
+            <GridSplitter Grid.Column="3" 
+                          ResizeDirection="Columns"
+                          Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"/>
+
+            <!-- Right Pane: Current Playlist -->
+            <Border Grid.Column="4" 
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" 
+                    BorderThickness="1,0,0,0"
+                    Padding="8">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    
+                    <!-- Playlist Header -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="Current Playlist"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding CurrentPlaylist.Count, StringFormat=' ({0})'}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                    </StackPanel>
+
+                    <!-- Playlist Items with Drag-Drop Support -->
+                    <ListBox Grid.Row="1"
+                             ItemsSource="{Binding CurrentPlaylist}"
+                             SelectedItem="{Binding SelectedPlaylistItem}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="Auto,80,*,Auto" 
+                                      Margin="4"
+                                      Background="Transparent">
+                                    
+                                    <!-- Drag Handle -->
+                                    <TextBlock Grid.Column="0"
+                                               Text="☰"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"
+                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                               Cursor="Hand"/>
+
+                                    <!-- Thumbnail -->
+                                    <Border Grid.Column="1" 
+                                            Width="60" 
+                                            Height="45"
+                                            CornerRadius="4"
+                                            ClipToBounds="True"
+                                            Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+                                        <Panel>
+                                            <Image Source="{Binding MediaFile.ThumbnailPath}"
+                                                   Stretch="UniformToFill"
+                                                   IsVisible="{Binding MediaFile.ThumbnailLoaded}"/>
+                                            <TextBlock Text="🎵"
+                                                       FontSize="18"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       IsVisible="{Binding !MediaFile.ThumbnailLoaded}"/>
+                                        </Panel>
+                                    </Border>
+
+                                    <!-- Metadata -->
+                                    <StackPanel Grid.Column="2" 
+                                                Margin="8,0,0,0"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding MediaFile.Metadata.Artist}"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="12"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   IsVisible="{Binding MediaFile.Metadata.Artist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                        <TextBlock Text="{Binding MediaFile.Metadata.Title}"
+                                                   FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                                        
+                                        <!-- Indicators -->
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="▶ Now Playing"
+                                                       FontSize="10"
+                                                       Foreground="Green"
+                                                       IsVisible="{Binding IsCurrentlyPlaying}"/>
+                                            <TextBlock Text="⚠ Duplicate"
+                                                       FontSize="10"
+                                                       Foreground="Orange"
+                                                       IsVisible="{Binding IsDuplicate}"/>
+                                            <TextBlock Text="✕ Error"
+                                                       FontSize="10"
+                                                       Foreground="Red"
+                                                       IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <!-- Remove Button -->
+                                    <Button Grid.Column="3"
+                                            Content="✕"
+                                            Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).RemoveSongCommand}"
+                                            CommandParameter="{Binding}"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Padding="8,4"
+                                            ToolTip.Tip="Remove from playlist"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- Playlist Actions -->
+                    <StackPanel Grid.Row="2" 
+                                Orientation="Horizontal" 
+                                Spacing="4"
+                                Margin="0,8,0,0">
+                        <Button Content="Clear"
+                                Command="{Binding ClearPlaylistCommand}"
+                                ToolTip.Tip="Clear all songs from playlist"/>
+                        <Button Content="Shuffle"
+                                Command="{Binding ShufflePlaylistCommand}"
+                                ToolTip.Tip="Shuffle playlist order"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Playback Controls -->
+        <Border Grid.Row="2" 
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" 
+                BorderThickness="0,1,0,0"
+                Padding="16,8"
+                Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                
+                <!-- Transport Controls -->
+                <StackPanel Grid.Column="0" 
+                            Orientation="Horizontal" 
+                            Spacing="8"
+                            VerticalAlignment="Center">
+                    <Button Content="⏮"
+                            Command="{Binding PreviousCommand}"
+                            Width="40"
+                            Height="40"
+                            FontSize="16"
+                            ToolTip.Tip="Previous"/>
+                    <Button Content="{Binding IsPlaying, Converter={StaticResource PlayPauseConverter}}"
+                            Command="{Binding PlayPauseCommand}"
+                            Width="50"
+                            Height="50"
+                            FontSize="20"
+                            ToolTip.Tip="Play/Pause"/>
+                    <Button Content="⏭"
+                            Command="{Binding NextCommand}"
+                            Width="40"
+                            Height="40"
+                            FontSize="16"
+                            ToolTip.Tip="Next"/>
+                    <Button Content="⏹"
+                            Command="{Binding StopCommand}"
+                            Width="40"
+                            Height="40"
+                            FontSize="16"
+                            ToolTip.Tip="Stop"/>
+                </StackPanel>
+
+                <!-- Progress Bar and Time -->
+                <StackPanel Grid.Column="1" 
+                            Margin="16,0"
+                            VerticalAlignment="Center">
+                    <Slider Value="{Binding CurrentTime}"
+                            Minimum="0"
+                            Maximum="{Binding Duration}"
+                            IsEnabled="{Binding IsPlaying}"
+                            Margin="0,0,0,4"/>
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock Grid.Column="0" 
+                                   Text="{Binding CurrentTime, StringFormat='{}{0:mm\\:ss}'}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                        <TextBlock Grid.Column="2" 
+                                   Text="{Binding Duration, StringFormat='{}{0:mm\\:ss}'}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Volume Control -->
+                <StackPanel Grid.Column="2" 
+                            Orientation="Horizontal" 
+                            Spacing="8"
+                            VerticalAlignment="Center">
+                    <Button Content="🔊"
+                            Width="40"
+                            Height="40"
+                            FontSize="16"
+                            ToolTip.Tip="Mute/Unmute"/>
+                    <Slider Value="{Binding Volume}"
+                            Minimum="0"
+                            Maximum="100"
+                            Width="100"
+                            VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Volume, StringFormat='{}{0:0}%'}"
+                               VerticalAlignment="Center"
+                               MinWidth="40"
+                               FontSize="11"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="3" 
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" 
+                BorderThickness="0,1,0,0"
+                Padding="16,4"
+                Background="{DynamicResource SystemControlBackgroundAltMediumBrush}">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16">
+                    <TextBlock Text="{Binding CurrentSongInfo}"
+                               VerticalAlignment="Center"
+                               FontSize="12"/>
+                    <TextBlock Text="{Binding StatusMessage}"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                </StackPanel>
+                
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="🔀"
+                               IsVisible="{Binding ShuffleEnabled}"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="Shuffle enabled"/>
+                    <TextBlock Text="🔁"
+                               IsVisible="{Binding CrossfadeEnabled}"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="Crossfade enabled"/>
+                    <TextBlock Text="{Binding MediaLibraryCount, StringFormat='📁 {0} files'}"
+                               VerticalAlignment="Center"
+                               FontSize="12"/>
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 
 </Window>
