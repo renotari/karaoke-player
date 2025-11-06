@@ -29,6 +29,11 @@ public static class TestRunner
             // Run PlaylistManager tests
             await PlaylistManagerTest.RunAllTests();
 
+            Console.WriteLine();
+
+            // Run MediaPlayerController tests
+            await MediaPlayerControllerTest.RunTests();
+
             Console.WriteLine("\n=====================================");
             Console.WriteLine("All tests completed successfully!");
             Console.WriteLine("=====================================\n");

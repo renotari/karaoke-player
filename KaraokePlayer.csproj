@@ -36,5 +36,6 @@
     <PackageReference Include="ReactiveUI" Version="22.2.1" />
     <PackageReference Include="SkiaSharp" Version="3.119.1" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
   </ItemGroup>
 </Project>
