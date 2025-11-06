@@ -33,6 +33,7 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.10" />
     <PackageReference Include="ReactiveUI" Version="22.2.1" />
+    <PackageReference Include="SkiaSharp" Version="3.119.1" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
   </ItemGroup>
 </Project>

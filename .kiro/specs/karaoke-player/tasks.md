@@ -87,7 +87,12 @@ This implementation plan breaks down the karaoke player design into discrete cod
   - Handle extraction failures gracefully (use filename as fallback)
   - _Requirements: 1A_
 
-- [ ] 6. Implement Thumbnail Generator service
+- [x] 6. Implement Thumbnail Generator service
+
+
+
+
+
   - Create IThumbnailGenerator interface and ThumbnailGenerator implementation
   - Use SkiaSharp to generate video thumbnails (capture frame at 10% duration)
   - Extract embedded artwork from MP3 files using TagLib#
