@@ -224,7 +224,12 @@ This implementation plan breaks down the karaoke player design into discrete cod
   - Wire up to ViewModels with ReactiveUI bindings
   - _Requirements: 2, 3, 4, 5_
 
-- [ ] 15. Create Main Window ViewModel
+- [x] 15. Create Main Window ViewModel
+
+
+
+
+
   - Create MainWindowViewModel with ReactiveUI
   - Implement properties: MediaFiles, SearchQuery, CurrentPlaylist, IsPlaying, CurrentSong
   - Implement commands: SearchCommand, AddToPlaylistCommand, RemoveSongCommand, PlayCommand, PauseCommand
