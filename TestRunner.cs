@@ -34,6 +34,11 @@ public static class TestRunner
             // Run MediaPlayerController tests
             await MediaPlayerControllerTest.RunTests();
 
+            Console.WriteLine();
+
+            // Run AudioVisualizationEngine tests
+            AudioVisualizationEngineTest.RunTests();
+
             Console.WriteLine("\n=====================================");
             Console.WriteLine("All tests completed successfully!");
             Console.WriteLine("=====================================\n");
