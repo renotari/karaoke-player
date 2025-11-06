@@ -24,6 +24,11 @@ public static class TestRunner
             // Run SearchEngine tests
             await SearchEngineTest.RunAllTests();
 
+            Console.WriteLine();
+
+            // Run PlaylistManager tests
+            await PlaylistManagerTest.RunAllTests();
+
             Console.WriteLine("\n=====================================");
             Console.WriteLine("All tests completed successfully!");
             Console.WriteLine("=====================================\n");
