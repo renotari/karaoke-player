@@ -30,6 +30,10 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool _shuffleEnabled;
     private bool _crossfadeEnabled;
     private int _mediaLibraryCount;
+    private bool _isVideoMode;
+    private bool _isControlHandleExpanded;
+    private string _videoModeSearchQuery = string.Empty;
+    private System.Timers.Timer? _handleCollapseTimer;
 
     // Design-time constructor for XAML preview
     public MainWindowViewModel()
@@ -117,6 +121,17 @@ public partial class MainWindowViewModel : ViewModelBase
         StopCommand = ReactiveCommand.Create(Stop);
         NextCommand = ReactiveCommand.Create(Next);
         PreviousCommand = ReactiveCommand.Create(Previous);
+
+        // Video Mode commands
+        ToggleVideoModeCommand = ReactiveCommand.Create(ToggleVideoMode);
+        ExpandControlHandleCommand = ReactiveCommand.Create(ExpandControlHandle);
+        CollapseControlHandleCommand = ReactiveCommand.Create(CollapseControlHandle);
+        AddToPlaylistFromVideoModeCommand = ReactiveCommand.CreateFromTask<MediaFile>(async file => await AddToPlaylistAsync(file, "next"));
+
+        // Initialize collapse timer
+        _handleCollapseTimer = new System.Timers.Timer(3000); // 3 seconds
+        _handleCollapseTimer.Elapsed += (s, e) => CollapseControlHandle();
+        _handleCollapseTimer.AutoReset = false;
     }
 
     private void SubscribeToServiceEvents()
@@ -260,6 +275,24 @@ public partial class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _mediaLibraryCount, value);
     }
 
+    public bool IsVideoMode
+    {
+        get => _isVideoMode;
+        set => this.RaiseAndSetIfChanged(ref _isVideoMode, value);
+    }
+
+    public bool IsControlHandleExpanded
+    {
+        get => _isControlHandleExpanded;
+        set => this.RaiseAndSetIfChanged(ref _isControlHandleExpanded, value);
+    }
+
+    public string VideoModeSearchQuery
+    {
+        get => _videoModeSearchQuery;
+        set => this.RaiseAndSetIfChanged(ref _videoModeSearchQuery, value);
+    }
+
     // Collections
     public ObservableCollection<MediaFile> MediaFiles { get; }
     public ObservableCollection<MediaFile> FilteredMediaFiles { get; }
@@ -279,6 +312,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> StopCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> NextCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> PreviousCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ToggleVideoModeCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ExpandControlHandleCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CollapseControlHandleCommand { get; private set; } = null!;
+    public ReactiveCommand<MediaFile, Unit> AddToPlaylistFromVideoModeCommand { get; private set; } = null!;
 
     // Command implementations
     private void ClearSearch()
@@ -732,6 +769,43 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    private void ToggleVideoMode()
+    {
+        IsVideoMode = !IsVideoMode;
+        
+        if (!IsVideoMode)
+        {
+            // Collapse handle when exiting video mode
+            IsControlHandleExpanded = false;
+            _handleCollapseTimer?.Stop();
+        }
+        
+        StatusMessage = IsVideoMode ? "Video Mode enabled" : "Normal Mode enabled";
+    }
+
+    private void ExpandControlHandle()
+    {
+        if (!IsVideoMode) return;
+
+        IsControlHandleExpanded = true;
+        
+        // Reset the auto-collapse timer
+        _handleCollapseTimer?.Stop();
+        _handleCollapseTimer?.Start();
+    }
+
+    private void CollapseControlHandle()
+    {
+        if (!IsVideoMode) return;
+
+        // Use dispatcher to ensure UI thread access
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            IsControlHandleExpanded = false;
+            _handleCollapseTimer?.Stop();
+        });
+    }
+
     private void LoadSampleData()
     {
         // Sample data for design-time preview
@@ -779,5 +853,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
         MediaLibraryCount = MediaFiles.Count;
         Duration = 245;
+    }
+
+    public void Dispose()
+    {
+        _handleCollapseTimer?.Dispose();
     }
 }

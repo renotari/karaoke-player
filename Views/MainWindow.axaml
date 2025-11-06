@@ -30,6 +30,7 @@
                 <MenuItem Header="_Exit" />
             </MenuItem>
             <MenuItem Header="_View">
+                <MenuItem Header="_Toggle Video Mode" Command="{Binding ToggleVideoModeCommand}" />
                 <MenuItem Header="_Single Screen Mode" />
                 <MenuItem Header="_Dual Screen Mode" />
                 <MenuItem Header="_Fullscreen" />
@@ -48,8 +49,8 @@
             </MenuItem>
         </Menu>
 
-        <!-- Main Content Area with Three Panes -->
-        <Grid Grid.Row="1" ColumnDefinitions="300,5,*,5,300">
+        <!-- Main Content Area - Normal Mode (Three Panes) -->
+        <Grid Grid.Row="1" ColumnDefinitions="300,5,*,5,300" IsVisible="{Binding !IsVideoMode}">
             
             <!-- Left Pane: Media Catalog with Search -->
             <Border Grid.Column="0" 
@@ -171,7 +172,8 @@
                             Padding="8,4"
                             ToolTip.Tip="Maximize Video"
                             Background="#80000000"
-                            Foreground="White"/>
+                            Foreground="White"
+                            Command="{Binding ToggleVideoModeCommand}"/>
                 </Grid>
             </Border>
 
@@ -294,6 +296,111 @@
                     </StackPanel>
                 </Grid>
             </Border>
+        </Grid>
+
+        <!-- Video Mode - Maximized Video with Collapsible Control Handle -->
+        <Grid Grid.Row="1" IsVisible="{Binding IsVideoMode}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Full-Screen Video Area -->
+            <Border Grid.Row="0" Background="Black">
+                <Grid>
+                    <!-- Video Player Placeholder -->
+                    <Border Background="Black">
+                        <TextBlock Text="Video Mode - Full Screen"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="White"
+                                   FontSize="32"
+                                   IsVisible="{Binding !IsPlaying}"/>
+                    </Border>
+
+                    <!-- Exit Video Mode Button (Top Right) -->
+                    <Button Content="⛶"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="8"
+                            Padding="8,4"
+                            ToolTip.Tip="Exit Video Mode"
+                            Background="#80000000"
+                            Foreground="White"
+                            Command="{Binding ToggleVideoModeCommand}"/>
+                </Grid>
+            </Border>
+
+            <!-- Collapsible Control Handle at Bottom -->
+            <Grid Grid.Row="1">
+                <!-- Collapsed Handle (Small Bar) -->
+                <Border x:Name="CollapsedHandle"
+                        Height="30"
+                        Background="#80000000"
+                        IsVisible="{Binding !IsControlHandleExpanded}">
+                    <Grid>
+                        <TextBlock Text="▲"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="White"
+                                   FontSize="16"/>
+                        <TextBlock Text="Quick Search &amp; Controls"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,0,0"
+                                   Foreground="White"
+                                   FontSize="12"
+                                   Opacity="0.7"/>
+                    </Grid>
+                </Border>
+
+                <!-- Expanded Handle (Full Controls) -->
+                <Border x:Name="ExpandedHandle"
+                        Background="#E0000000"
+                        IsVisible="{Binding IsControlHandleExpanded}"
+                        Padding="16,12">
+                    <Grid RowDefinitions="Auto,Auto,Auto">
+                        
+                        <!-- Collapse Button -->
+                        <Button Grid.Row="0"
+                                Content="▼ Collapse"
+                                HorizontalAlignment="Right"
+                                Command="{Binding CollapseControlHandleCommand}"
+                                Background="Transparent"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Margin="0,0,0,8"/>
+
+                        <!-- Quick Search -->
+                        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+                            <TextBox Grid.Column="0"
+                                     Watermark="Quick Search..."
+                                     Text="{Binding VideoModeSearchQuery, Mode=TwoWay}"
+                                     Margin="0,0,8,0"/>
+                            <Button Grid.Column="1"
+                                    Content="Search"
+                                    Command="{Binding SearchCommand}"
+                                    CommandParameter="{Binding VideoModeSearchQuery}"/>
+                        </Grid>
+
+                        <!-- Quick Actions -->
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12">
+                            <Button Content="📋 View Playlist"
+                                    Padding="12,6"
+                                    Background="#80FFFFFF"
+                                    ToolTip.Tip="View current playlist"/>
+                            <Button Content="⚙ Settings"
+                                    Padding="12,6"
+                                    Background="#80FFFFFF"
+                                    ToolTip.Tip="Open settings"/>
+                            <Button Content="Exit Video Mode"
+                                    Padding="12,6"
+                                    Background="#80FFFFFF"
+                                    Command="{Binding ToggleVideoModeCommand}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
         </Grid>
 
         <!-- Playback Controls -->

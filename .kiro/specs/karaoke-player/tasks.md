@@ -238,7 +238,12 @@ This implementation plan breaks down the karaoke player design into discrete cod
   - Handle optimistic updates for playlist operations (< 50ms UI response)
   - _Requirements: 2, 3, 4, 5_
 
-- [ ] 16. Implement Video Mode (Maximized View) in Main Window
+- [x] 16. Implement Video Mode (Maximized View) in Main Window
+
+
+
+
+
   - Add Video_Mode state to MainWindowViewModel
   - Create collapsible Control_Handle at bottom edge of video area
   - Implement handle expand/collapse on hover/click with auto-collapse after 3 seconds
