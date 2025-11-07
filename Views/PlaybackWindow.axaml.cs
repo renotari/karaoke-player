@@ -78,6 +78,9 @@ public partial class PlaybackWindow : Window
         {
             viewModel.FullscreenRequested -= OnFullscreenRequested;
             viewModel.VisualizationUpdateRequested -= OnVisualizationUpdateRequested;
+            
+            // Cleanup ViewModel subscriptions
+            viewModel.Cleanup();
         }
     }
 

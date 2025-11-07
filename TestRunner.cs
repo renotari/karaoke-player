@@ -39,6 +39,11 @@ public static class TestRunner
             // Run AudioVisualizationEngine tests
             AudioVisualizationEngineTest.RunTests();
 
+            Console.WriteLine();
+
+            // Run PlaybackWindow tests
+            await TestPlaybackWindow.RunTests();
+
             Console.WriteLine("\n=====================================");
             Console.WriteLine("All tests completed successfully!");
             Console.WriteLine("=====================================\n");

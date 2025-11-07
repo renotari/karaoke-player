@@ -272,7 +272,12 @@ git status
   - Display audio visualizations for MP3 files
   - _Requirements: 4, 6, 12, 17_
 
-- [ ] 18. Create Playback Window ViewModel
+- [x] 18. Create Playback Window ViewModel
+
+
+
+
+
   - Create PlaybackWindowViewModel with ReactiveUI
   - Implement properties: CurrentSong, IsPlaying, CurrentTime, Duration, SubtitlesEnabled
   - Subscribe to Media Player Controller state changes via message bus

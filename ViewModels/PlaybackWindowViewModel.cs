@@ -57,6 +57,7 @@ public class PlaybackWindowViewModel : ViewModelBase
 
     private void SubscribeToServiceEvents()
     {
+        // Subscribe to MediaPlayerController events directly
         if (_mediaPlayerController != null)
         {
             _mediaPlayerController.StateChanged += OnPlaybackStateChanged;
@@ -64,6 +65,36 @@ public class PlaybackWindowViewModel : ViewModelBase
             _mediaPlayerController.MediaEnded += OnMediaEnded;
             _mediaPlayerController.PlaybackError += OnPlaybackError;
         }
+
+        // Subscribe to message bus for cross-window state synchronization
+        SubscribeToMessageBus();
+    }
+
+    private void SubscribeToMessageBus()
+    {
+        // Listen for playback state updates from other windows
+        ReactiveUI.MessageBus.Current.Listen<PlaybackStateMessage>()
+            .Subscribe(msg =>
+            {
+                CurrentSong = msg.CurrentSong;
+                IsPlaying = msg.IsPlaying;
+                CurrentTime = msg.CurrentTime;
+                Duration = msg.Duration;
+            });
+
+        // Listen for media change messages
+        ReactiveUI.MessageBus.Current.Listen<MediaChangedMessage>()
+            .Subscribe(msg =>
+            {
+                CurrentSong = msg.MediaFile;
+            });
+
+        // Listen for subtitle toggle messages
+        ReactiveUI.MessageBus.Current.Listen<SubtitleToggleMessage>()
+            .Subscribe(msg =>
+            {
+                SubtitlesEnabled = msg.Enabled;
+            });
     }
 
     // Properties
@@ -192,6 +223,12 @@ public class PlaybackWindowViewModel : ViewModelBase
     {
         SubtitlesEnabled = !SubtitlesEnabled;
         _mediaPlayerController?.ToggleSubtitles(SubtitlesEnabled);
+
+        // Broadcast subtitle toggle via message bus
+        ReactiveUI.MessageBus.Current.SendMessage(new SubtitleToggleMessage
+        {
+            Enabled = SubtitlesEnabled
+        });
     }
 
     // Service event handlers
@@ -208,6 +245,9 @@ public class PlaybackWindowViewModel : ViewModelBase
         {
             HasMedia = false;
         }
+
+        // Broadcast state change via message bus for cross-window synchronization
+        BroadcastPlaybackState();
     }
 
     private void OnPlaybackTimeChanged(object? sender, TimeChangedEventArgs e)
@@ -220,18 +260,41 @@ public class PlaybackWindowViewModel : ViewModelBase
         {
             VisualizationUpdateRequested?.Invoke(this, EventArgs.Empty);
         }
+
+        // Broadcast time update via message bus (throttled to avoid excessive messages)
+        BroadcastPlaybackState();
     }
 
     private void OnMediaEnded(object? sender, MediaEndedEventArgs e)
     {
         HasMedia = false;
         CurrentSong = null;
+
+        // Broadcast state change via message bus
+        BroadcastPlaybackState();
     }
 
     private void OnPlaybackError(object? sender, PlaybackErrorEventArgs e)
     {
         // Error handling - could show error message in UI
         HasMedia = false;
+
+        // Broadcast state change via message bus
+        BroadcastPlaybackState();
+    }
+
+    /// <summary>
+    /// Broadcasts current playback state to other windows via message bus
+    /// </summary>
+    private void BroadcastPlaybackState()
+    {
+        ReactiveUI.MessageBus.Current.SendMessage(new PlaybackStateMessage
+        {
+            CurrentSong = CurrentSong,
+            IsPlaying = IsPlaying,
+            CurrentTime = CurrentTime,
+            Duration = Duration
+        });
     }
 
     // Helper methods
@@ -331,10 +394,55 @@ public class PlaybackWindowViewModel : ViewModelBase
         Duration = 245;
         CurrentTime = 60;
     }
+
+    /// <summary>
+    /// Cleanup method to unsubscribe from events when the ViewModel is disposed
+    /// </summary>
+    public void Cleanup()
+    {
+        if (_mediaPlayerController != null)
+        {
+            _mediaPlayerController.StateChanged -= OnPlaybackStateChanged;
+            _mediaPlayerController.TimeChanged -= OnPlaybackTimeChanged;
+            _mediaPlayerController.MediaEnded -= OnMediaEnded;
+            _mediaPlayerController.PlaybackError -= OnPlaybackError;
+        }
+    }
 }
 
-// Message class for cross-window communication
+// Message classes for cross-window communication
+
+/// <summary>
+/// Message for playback control commands (play, pause, next, etc.)
+/// </summary>
 public class PlaybackControlMessage
 {
     public string Action { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Message for playback state synchronization across windows
+/// </summary>
+public class PlaybackStateMessage
+{
+    public MediaFile? CurrentSong { get; set; }
+    public bool IsPlaying { get; set; }
+    public double CurrentTime { get; set; }
+    public double Duration { get; set; }
+}
+
+/// <summary>
+/// Message for media change notifications
+/// </summary>
+public class MediaChangedMessage
+{
+    public MediaFile? MediaFile { get; set; }
+}
+
+/// <summary>
+/// Message for subtitle toggle notifications
+/// </summary>
+public class SubtitleToggleMessage
+{
+    public bool Enabled { get; set; }
 }
