@@ -1,0 +1,185 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:KaraokePlayer.ViewModels"
+        xmlns:vlc="using:LibVLCSharp.Avalonia"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1920" d:DesignHeight="1080"
+        x:Class="KaraokePlayer.Views.PlaybackWindow"
+        x:DataType="vm:PlaybackWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Karaoke Player - Playback"
+        Width="1920"
+        Height="1080"
+        MinWidth="800"
+        MinHeight="600"
+        Background="Black"
+        WindowStartupLocation="CenterScreen">
+
+    <Design.DataContext>
+        <vm:PlaybackWindowViewModel/>
+    </Design.DataContext>
+
+    <Grid RowDefinitions="*,Auto">
+        
+        <!-- Main Video/Visualization Display Area -->
+        <Panel Grid.Row="0" Background="Black">
+            
+            <!-- LibVLC Video View for Video Files -->
+            <vlc:VideoView x:Name="VideoView"
+                          IsVisible="{Binding IsVideoContent}"
+                          Content="{Binding MediaPlayer}"/>
+            
+            <!-- Audio Visualization for MP3 Files -->
+            <Panel x:Name="VisualizationPanel"
+                   IsVisible="{Binding IsAudioContent}">
+                
+                <!-- Background: Album Artwork (if available) -->
+                <Border x:Name="ArtworkBackground">
+                    <Panel>
+                        <!-- Artwork Image with Blur Effect -->
+                        <Image Source="{Binding CurrentArtwork}"
+                               Stretch="UniformToFill"
+                               Opacity="0.3"
+                               IsVisible="{Binding CurrentArtwork, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                        
+                        <!-- Dark Overlay -->
+                        <Border Background="#80000000"/>
+                    </Panel>
+                </Border>
+                
+                <!-- Visualization Canvas -->
+                <Canvas x:Name="VisualizationCanvas"
+                        Background="Transparent"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"/>
+                
+                <!-- Song Info Overlay -->
+                <StackPanel VerticalAlignment="Center"
+                           HorizontalAlignment="Center"
+                           Spacing="16">
+                    
+                    <!-- Album Artwork (Centered) -->
+                    <Border Width="300"
+                            Height="300"
+                            CornerRadius="8"
+                            BoxShadow="0 8 32 #80000000"
+                            IsVisible="{Binding CurrentArtwork, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <Image Source="{Binding CurrentArtwork}"
+                               Stretch="UniformToFill"/>
+                    </Border>
+                    
+                    <!-- Song Title -->
+                    <TextBlock Text="{Binding CurrentTitle}"
+                               FontSize="48"
+                               FontWeight="Bold"
+                               Foreground="White"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               MaxWidth="1200"
+                               Margin="0,32,0,0"/>
+                    
+                    <!-- Artist Name -->
+                    <TextBlock Text="{Binding CurrentArtist}"
+                               FontSize="32"
+                               Foreground="#E0FFFFFF"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               MaxWidth="1200"
+                               IsVisible="{Binding CurrentArtist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                </StackPanel>
+            </Panel>
+            
+            <!-- Fullscreen Toggle Button (Top Right) - Hidden in fullscreen mode -->
+            <Button Content="⛶"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="16"
+                    Padding="12,8"
+                    FontSize="20"
+                    ToolTip.Tip="Toggle Fullscreen (F11)"
+                    Background="#60000000"
+                    Foreground="White"
+                    BorderThickness="0"
+                    Opacity="0.7"
+                    IsVisible="{Binding !IsFullscreen}"
+                    Command="{Binding ToggleFullscreenCommand}">
+                <Button.Styles>
+                    <Style Selector="Button:pointerover">
+                        <Setter Property="Opacity" Value="1.0"/>
+                        <Setter Property="Background" Value="#80000000"/>
+                    </Style>
+                </Button.Styles>
+            </Button>
+            
+            <!-- Loading Indicator -->
+            <Border Background="#C0000000"
+                    IsVisible="{Binding IsBuffering}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    CornerRadius="8"
+                    Padding="32,24">
+                <StackPanel Spacing="16" HorizontalAlignment="Center">
+                    <TextBlock Text="⏳"
+                               FontSize="48"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="Loading..."
+                               FontSize="24"
+                               Foreground="White"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+            
+            <!-- No Media Message -->
+            <Border Background="#C0000000"
+                    IsVisible="{Binding !HasMedia}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    CornerRadius="8"
+                    Padding="48,32">
+                <StackPanel Spacing="16" HorizontalAlignment="Center">
+                    <TextBlock Text="🎵"
+                               FontSize="64"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="No media playing"
+                               FontSize="28"
+                               Foreground="White"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="Select a song from the control window"
+                               FontSize="16"
+                               Foreground="#C0FFFFFF"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Panel>
+        
+        <!-- Subtitle Display Area -->
+        <Border Grid.Row="1"
+                Background="Transparent"
+                Height="120"
+                IsVisible="{Binding SubtitlesVisible}">
+            <TextBlock x:Name="SubtitleText"
+                       Text="{Binding CurrentSubtitle}"
+                       FontSize="32"
+                       FontWeight="Bold"
+                       Foreground="White"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       MaxWidth="1600"
+                       Margin="32">
+                <TextBlock.Effect>
+                    <DropShadowEffect Color="Black"
+                                     BlurRadius="8"
+                                     OffsetX="2"
+                                     OffsetY="2"
+                                     Opacity="0.9"/>
+                </TextBlock.Effect>
+            </TextBlock>
+        </Border>
+    </Grid>
+
+</Window>

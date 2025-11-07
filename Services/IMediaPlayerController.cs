@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using KaraokePlayer.Models;
+using LibVLCSharp.Shared;
 
 namespace KaraokePlayer.Services;
 
@@ -118,6 +119,12 @@ public interface IMediaPlayerController
     /// Gets the current crossfade duration in seconds
     /// </summary>
     int CrossfadeDuration { get; }
+
+    /// <summary>
+    /// Gets the active MediaPlayer instance for video rendering
+    /// </summary>
+    /// <returns>The currently active MediaPlayer</returns>
+    LibVLCSharp.Shared.MediaPlayer GetActiveMediaPlayer();
 
     /// <summary>
     /// Event raised when playback state changes

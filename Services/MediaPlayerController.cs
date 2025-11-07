@@ -428,6 +428,15 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         return _isPreloadedPlayerActive ? _currentPlayer : _preloadedPlayer;
     }
 
+    /// <summary>
+    /// Gets the active MediaPlayer instance for video rendering
+    /// </summary>
+    /// <returns>The currently active MediaPlayer</returns>
+    public MediaPlayer GetActiveMediaPlayer()
+    {
+        return GetActivePlayer();
+    }
+
     #endregion
 
     #region Crossfade Implementation
