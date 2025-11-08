@@ -331,7 +331,12 @@ git status
   - Implement filtering by artist, title, metadata
   - _Requirements: 23_
 
-- [ ] 22. Create Settings Window UI
+- [x] 22. Create Settings Window UI
+
+
+
+
+
   - Design SettingsWindow.axaml with tabbed interface (General, Audio, Display, Keyboard)
   - General tab: Media directory picker, display mode toggle, auto-play, shuffle
   - Audio tab: Volume, audio boost, audio output device selector, test audio button

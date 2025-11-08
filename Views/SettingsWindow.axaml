@@ -1,0 +1,385 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:KaraokePlayer.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="600"
+        x:Class="KaraokePlayer.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="Settings"
+        Width="700" Height="600"
+        MinWidth="600" MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        Icon="/Assets/avalonia-logo.ico">
+
+  <Design.DataContext>
+    <vm:SettingsViewModel />
+  </Design.DataContext>
+
+  <Grid RowDefinitions="*,Auto">
+    <!-- Main Content Area with Tabs -->
+    <TabControl Grid.Row="0" Margin="10">
+      
+      <!-- General Tab -->
+      <TabItem Header="General">
+        <ScrollViewer>
+          <StackPanel Spacing="15" Margin="20">
+            
+            <!-- Media Directory -->
+            <StackPanel Spacing="5">
+              <TextBlock Text="Media Directory" FontWeight="Bold" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox Grid.Column="0" 
+                         Text="{Binding MediaDirectory}"
+                         IsReadOnly="True"
+                         Watermark="Select media directory..." />
+                <Button Grid.Column="1" 
+                        Content="Browse..."
+                        Command="{Binding BrowseMediaDirectoryCommand}"
+                        Margin="5,0,0,0"
+                        Width="100" />
+              </Grid>
+              <TextBlock Text="Location where your media files (MP4, MKV, WEBM, MP3) are stored"
+                         FontSize="11"
+                         Foreground="Gray" />
+            </StackPanel>
+
+            <!-- Display Mode -->
+            <StackPanel Spacing="5">
+              <TextBlock Text="Display Mode" FontWeight="Bold" />
+              <ComboBox SelectedIndex="{Binding DisplayModeIndex}"
+                        HorizontalAlignment="Stretch">
+                <ComboBoxItem Content="Single Screen Mode" />
+                <ComboBoxItem Content="Dual Screen Mode" />
+              </ComboBox>
+              <TextBlock Text="Single screen shows everything in one window. Dual screen separates playback and controls."
+                         FontSize="11"
+                         Foreground="Gray" />
+            </StackPanel>
+
+            <!-- Auto-Play -->
+            <StackPanel Spacing="5">
+              <CheckBox IsChecked="{Binding AutoPlayEnabled}"
+                        Content="Enable Auto-Play" />
+              <TextBlock Text="Automatically start the next song when current song finishes"
+                         FontSize="11"
+                         Foreground="Gray"
+                         Margin="25,0,0,0" />
+            </StackPanel>
+
+            <!-- Shuffle Mode -->
+            <StackPanel Spacing="5">
+              <CheckBox IsChecked="{Binding ShuffleMode}"
+                        Content="Enable Shuffle Mode" />
+              <TextBlock Text="Randomize playlist order when shuffle is activated"
+                         FontSize="11"
+                         Foreground="Gray"
+                         Margin="25,0,0,0" />
+            </StackPanel>
+
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Audio Tab -->
+      <TabItem Header="Audio">
+        <ScrollViewer>
+          <StackPanel Spacing="15" Margin="20">
+            
+            <!-- Volume -->
+            <StackPanel Spacing="5">
+              <TextBlock Text="Volume" FontWeight="Bold" />
+              <Grid ColumnDefinitions="*,Auto">
+                <Slider Grid.Column="0"
+                        Minimum="0"
+                        Maximum="100"
+                        Value="{Binding VolumePercent}"
+                        TickFrequency="10"
+                        IsSnapToTickEnabled="False" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding VolumePercent, StringFormat='{}{0:F0}%'}"
+                           Width="50"
+                           TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Margin="10,0,0,0" />
+              </Grid>
+            </StackPanel>
+
+            <!-- Audio Boost -->
+            <StackPanel Spacing="5">
+              <CheckBox IsChecked="{Binding AudioBoostEnabled}"
+                        Content="Enable Audio Boost" />
+              <TextBlock Text="Apply real-time audio normalization to boost quiet songs"
+                         FontSize="11"
+                         Foreground="Gray"
+                         Margin="25,0,0,0" />
+            </StackPanel>
+
+            <!-- Audio Output Device -->
+            <StackPanel Spacing="5">
+              <TextBlock Text="Audio Output Device" FontWeight="Bold" />
+              <ComboBox ItemsSource="{Binding AudioDevices}"
+                        SelectedItem="{Binding SelectedAudioDevice}"
+                        HorizontalAlignment="Stretch" />
+              <Button Content="Test Audio"
+                      Command="{Binding TestAudioCommand}"
+                      HorizontalAlignment="Left"
+                      Margin="0,5,0,0" />
+              <TextBlock Text="Select which audio device to use for playback"
+                         FontSize="11"
+                         Foreground="Gray" />
+            </StackPanel>
+
+            <!-- Crossfade Settings -->
+            <Border BorderBrush="Gray" BorderThickness="1" Padding="10" CornerRadius="5">
+              <StackPanel Spacing="10">
+                <TextBlock Text="Crossfade Settings" FontWeight="Bold" FontSize="14" />
+                
+                <CheckBox IsChecked="{Binding CrossfadeEnabled}"
+                          Content="Enable Crossfade Transitions" />
+                
+                <StackPanel Spacing="5" IsEnabled="{Binding CrossfadeEnabled}">
+                  <TextBlock Text="Crossfade Duration (seconds)" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <Slider Grid.Column="0"
+                            Minimum="1"
+                            Maximum="20"
+                            Value="{Binding CrossfadeDuration}"
+                            TickFrequency="1"
+                            IsSnapToTickEnabled="True" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding CrossfadeDuration, StringFormat='{}{0}s'}"
+                               Width="50"
+                               TextAlignment="Right"
+                               VerticalAlignment="Center"
+                               Margin="10,0,0,0" />
+                  </Grid>
+                  <TextBlock Text="Smooth transition between songs (1-20 seconds)"
+                             FontSize="11"
+                             Foreground="Gray" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Display Tab -->
+      <TabItem Header="Display">
+        <ScrollViewer>
+          <StackPanel Spacing="15" Margin="20">
+            
+            <!-- Theme -->
+            <StackPanel Spacing="5">
+              <TextBlock Text="Theme" FontWeight="Bold" />
+              <ComboBox SelectedIndex="{Binding ThemeIndex}"
+                        HorizontalAlignment="Stretch">
+                <ComboBoxItem Content="Dark Theme" />
+                <ComboBoxItem Content="Light Theme" />
+              </ComboBox>
+              <TextBlock Text="Choose between dark and light color schemes"
+                         FontSize="11"
+                         Foreground="Gray" />
+            </StackPanel>
+
+            <!-- Font Size -->
+            <StackPanel Spacing="5">
+              <TextBlock Text="Font Size" FontWeight="Bold" />
+              <Grid ColumnDefinitions="*,Auto">
+                <Slider Grid.Column="0"
+                        Minimum="8"
+                        Maximum="32"
+                        Value="{Binding FontSize}"
+                        TickFrequency="2"
+                        IsSnapToTickEnabled="True" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding FontSize, StringFormat='{}{0}pt'}"
+                           Width="50"
+                           TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Margin="10,0,0,0" />
+              </Grid>
+              <TextBlock Text="Adjust text size throughout the application (8-32pt)"
+                         FontSize="11"
+                         Foreground="Gray" />
+            </StackPanel>
+
+            <!-- Visualization Style -->
+            <StackPanel Spacing="5">
+              <TextBlock Text="Audio Visualization Style" FontWeight="Bold" />
+              <ComboBox SelectedIndex="{Binding VisualizationStyleIndex}"
+                        HorizontalAlignment="Stretch">
+                <ComboBoxItem Content="Bars" />
+                <ComboBoxItem Content="Waveform" />
+                <ComboBoxItem Content="Circular" />
+                <ComboBoxItem Content="Particles" />
+              </ComboBox>
+              <TextBlock Text="Visual effect displayed during MP3 playback"
+                         FontSize="11"
+                         Foreground="Gray" />
+            </StackPanel>
+
+            <!-- Window Layout Preferences -->
+            <StackPanel Spacing="5">
+              <TextBlock Text="Window Layout" FontWeight="Bold" />
+              <TextBlock Text="Window positions and sizes are automatically saved and restored"
+                         FontSize="11"
+                         Foreground="Gray" />
+            </StackPanel>
+
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Keyboard Tab -->
+      <TabItem Header="Keyboard">
+        <ScrollViewer>
+          <StackPanel Spacing="15" Margin="20">
+            
+            <TextBlock Text="Keyboard Shortcuts" FontWeight="Bold" FontSize="14" />
+            <TextBlock Text="Customize keyboard shortcuts for common actions"
+                       FontSize="11"
+                       Foreground="Gray" />
+
+            <!-- Shortcuts List -->
+            <Border BorderBrush="Gray" BorderThickness="1" CornerRadius="5">
+              <ScrollViewer MaxHeight="350">
+                <ItemsControl ItemsSource="{Binding KeyboardShortcuts}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="LightGray" BorderThickness="0,0,0,1" Padding="10">
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                          <TextBlock Grid.Column="0" 
+                                     Text="{Binding Action}"
+                                     VerticalAlignment="Center" />
+                          <TextBox Grid.Column="1"
+                                   Text="{Binding Shortcut}"
+                                   Width="150"
+                                   Margin="10,0"
+                                   Watermark="Press keys..." />
+                          <Button Grid.Column="2"
+                                  Content="Reset"
+                                  Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).ResetShortcutCommand}"
+                                  CommandParameter="{Binding}"
+                                  Width="70" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Border>
+
+            <TextBlock Text="⚠ Conflicts will be highlighted automatically"
+                       FontSize="11"
+                       Foreground="Orange"
+                       FontStyle="Italic" />
+
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Performance Tab -->
+      <TabItem Header="Performance">
+        <ScrollViewer>
+          <StackPanel Spacing="15" Margin="20">
+            
+            <TextBlock Text="Performance Settings" FontWeight="Bold" FontSize="14" />
+            <TextBlock Text="Adjust these settings to optimize performance for your system"
+                       FontSize="11"
+                       Foreground="Gray" />
+
+            <!-- Preload Buffer Size -->
+            <StackPanel Spacing="5">
+              <TextBlock Text="Preload Buffer Size (MB)" FontWeight="Bold" />
+              <Grid ColumnDefinitions="*,Auto">
+                <Slider Grid.Column="0"
+                        Minimum="10"
+                        Maximum="500"
+                        Value="{Binding PreloadBufferSize}"
+                        TickFrequency="10"
+                        IsSnapToTickEnabled="True" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding PreloadBufferSize, StringFormat='{}{0} MB'}"
+                           Width="70"
+                           TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Margin="10,0,0,0" />
+              </Grid>
+              <TextBlock Text="Amount of media data to preload for smooth playback (10-500 MB)"
+                         FontSize="11"
+                         Foreground="Gray" />
+            </StackPanel>
+
+            <!-- Cache Size -->
+            <StackPanel Spacing="5">
+              <TextBlock Text="Cache Size (MB)" FontWeight="Bold" />
+              <Grid ColumnDefinitions="*,Auto">
+                <Slider Grid.Column="0"
+                        Minimum="100"
+                        Maximum="5000"
+                        Value="{Binding CacheSize}"
+                        TickFrequency="100"
+                        IsSnapToTickEnabled="True" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding CacheSize, StringFormat='{}{0} MB'}"
+                           Width="70"
+                           TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Margin="10,0,0,0" />
+              </Grid>
+              <TextBlock Text="Maximum size for thumbnails and metadata cache (100-5000 MB)"
+                         FontSize="11"
+                         Foreground="Gray" />
+            </StackPanel>
+
+            <TextBlock Text="💡 Larger values improve performance but use more disk space"
+                       FontSize="11"
+                       Foreground="LightBlue"
+                       FontStyle="Italic"
+                       Margin="0,10,0,0" />
+
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+    </TabControl>
+
+    <!-- Bottom Action Buttons -->
+    <Border Grid.Row="1" 
+            BorderBrush="Gray" 
+            BorderThickness="0,1,0,0" 
+            Padding="10"
+            Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+        
+        <Button Grid.Column="0"
+                Content="Reset to Defaults"
+                Command="{Binding ResetToDefaultsCommand}"
+                HorizontalAlignment="Left" />
+
+        <Button Grid.Column="2"
+                Content="OK"
+                Command="{Binding OkCommand}"
+                Width="100"
+                Margin="5,0" />
+
+        <Button Grid.Column="3"
+                Content="Cancel"
+                Command="{Binding CancelCommand}"
+                Width="100"
+                Margin="5,0" />
+
+        <Button Grid.Column="4"
+                Content="Apply"
+                Command="{Binding ApplyCommand}"
+                Width="100"
+                Margin="5,0" />
+        
+      </Grid>
+    </Border>
+
+  </Grid>
+
+</Window>
