@@ -1,0 +1,402 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:KaraokePlayer.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
+        x:Class="KaraokePlayer.Views.PlaylistComposerWindow"
+        x:DataType="vm:PlaylistComposerViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Playlist Composer"
+        Width="1200"
+        Height="700"
+        MinWidth="1024"
+        MinHeight="600"
+        WindowStartupLocation="CenterScreen">
+
+    <Design.DataContext>
+        <vm:PlaylistComposerViewModel/>
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        
+        <!-- Title Bar with Playlist Name -->
+        <Border Grid.Row="0" 
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" 
+                BorderThickness="0,0,0,1"
+                Padding="16,12"
+                Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <TextBlock Grid.Column="0" 
+                           Text="Build Playlist"
+                           FontSize="18"
+                           FontWeight="Bold"
+                           VerticalAlignment="Center"
+                           Margin="0,0,16,0"/>
+                
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="Playlist Name:"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                    <TextBox Width="300"
+                             Watermark="Enter playlist name..."
+                             Text="{Binding PlaylistName, Mode=TwoWay}"
+                             VerticalAlignment="Center"/>
+                </StackPanel>
+                
+                <Button Grid.Column="2"
+                        Content="Save"
+                        Command="{Binding SavePlaylistCommand}"
+                        Padding="16,8"
+                        Margin="0,0,8,0"
+                        ToolTip.Tip="Save playlist to M3U file"/>
+                
+                <Button Grid.Column="3"
+                        Content="✕"
+                        Command="{Binding CloseCommand}"
+                        Padding="12,8"
+                        ToolTip.Tip="Close window"/>
+            </Grid>
+        </Border>
+
+        <!-- Main Content: Two-Pane Layout -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,5,*">
+            
+            <!-- Left Pane: Catalog View -->
+            <Border Grid.Column="0" 
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" 
+                    BorderThickness="0,0,1,0"
+                    Padding="12">
+                <Grid RowDefinitions="Auto,Auto,Auto,*">
+                    
+                    <!-- Catalog Header -->
+                    <TextBlock Grid.Row="0" 
+                               Text="Media Catalog"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               Margin="0,0,0,12"/>
+                    
+                    <!-- Search/Filter Box -->
+                    <TextBox Grid.Row="1"
+                             Watermark="Search by artist, title, or filename..."
+                             Text="{Binding CatalogSearchQuery, Mode=TwoWay}"
+                             Margin="0,0,0,8">
+                        <TextBox.InnerRightContent>
+                            <Button Content="✕" 
+                                    IsVisible="{Binding CatalogSearchQuery, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                    Command="{Binding ClearCatalogSearchCommand}"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Padding="4"/>
+                        </TextBox.InnerRightContent>
+                    </TextBox>
+                    
+                    <!-- Artist Filter Dropdown -->
+                    <Grid Grid.Row="2" ColumnDefinitions="Auto,*" Margin="0,0,0,12">
+                        <TextBlock Grid.Column="0" 
+                                   Text="Filter by Artist:"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding ArtistFilterOptions}"
+                                  SelectedItem="{Binding SelectedArtistFilter}"
+                                  PlaceholderText="All Artists"
+                                  HorizontalAlignment="Stretch"/>
+                    </Grid>
+                    
+                    <!-- Catalog List with Multi-Select Support -->
+                    <ListBox x:Name="CatalogListBox"
+                             Grid.Row="3"
+                             ItemsSource="{Binding FilteredCatalogFiles}"
+                             SelectedItems="{Binding SelectedCatalogItems}"
+                             SelectionMode="Multiple"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="80,*,Auto" 
+                                      Margin="4"
+                                      Background="Transparent">
+                                    
+                                    <!-- Thumbnail -->
+                                    <Border Grid.Column="0" 
+                                            Width="80" 
+                                            Height="60"
+                                            CornerRadius="4"
+                                            ClipToBounds="True"
+                                            Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+                                        <Panel>
+                                            <Image Source="{Binding ThumbnailPath}"
+                                                   Stretch="UniformToFill"
+                                                   IsVisible="{Binding ThumbnailLoaded}"/>
+                                            <TextBlock Text="🎵"
+                                                       FontSize="24"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       IsVisible="{Binding !ThumbnailLoaded}"/>
+                                        </Panel>
+                                    </Border>
+
+                                    <!-- Metadata -->
+                                    <StackPanel Grid.Column="1" 
+                                                Margin="8,0,0,0"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Metadata.Artist}"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   IsVisible="{Binding Metadata.Artist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                        <TextBlock Text="{Binding Metadata.Title}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                                        <TextBlock Text="{Binding Metadata.Duration, StringFormat='{}{0:mm\\:ss}'}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                                    </StackPanel>
+
+                                    <!-- Add Button -->
+                                    <Button Grid.Column="2"
+                                            Content="+"
+                                            Command="{Binding $parent[ListBox].((vm:PlaylistComposerViewModel)DataContext).AddSingleSongCommand}"
+                                            CommandParameter="{Binding}"
+                                            Width="32"
+                                            Height="32"
+                                            FontSize="18"
+                                            FontWeight="Bold"
+                                            Padding="0"
+                                            ToolTip.Tip="Add to composition"
+                                            VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- Grid Splitter -->
+            <GridSplitter Grid.Column="1" 
+                          ResizeDirection="Columns"
+                          Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"/>
+
+            <!-- Right Pane: Composition View -->
+            <Border Grid.Column="2" 
+                    Padding="12">
+                <Grid RowDefinitions="Auto,Auto,*,Auto">
+                    
+                    <!-- Composition Header -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+                        <TextBlock Text="Playlist Being Built"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding ComposedPlaylist.Count, StringFormat=' ({0} songs)'}"
+                                   VerticalAlignment="Center"
+                                   Margin="4,0,0,0"
+                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                    </StackPanel>
+                    
+                    <!-- Total Duration Display -->
+                    <Border Grid.Row="1"
+                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                            CornerRadius="4"
+                            Padding="12,8"
+                            Margin="0,0,0,12">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <TextBlock Grid.Column="0"
+                                       Text="Total Duration:"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding TotalDuration, StringFormat='{}{0:hh\\:mm\\:ss}'}"
+                                       FontSize="16"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource SystemAccentColor}"/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Composition List with Reorder Support -->
+                    <ListBox x:Name="CompositionListBox"
+                             Grid.Row="2"
+                             ItemsSource="{Binding ComposedPlaylist}"
+                             SelectedItem="{Binding SelectedCompositionItem}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="Auto,80,*,Auto" 
+                                      Margin="4"
+                                      Background="Transparent">
+                                    
+                                    <!-- Drag Handle -->
+                                    <TextBlock Grid.Column="0"
+                                               Text="☰"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"
+                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                               Cursor="Hand"
+                                               ToolTip.Tip="Drag to reorder"/>
+
+                                    <!-- Thumbnail -->
+                                    <Border Grid.Column="1" 
+                                            Width="60" 
+                                            Height="45"
+                                            CornerRadius="4"
+                                            ClipToBounds="True"
+                                            Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+                                        <Panel>
+                                            <Image Source="{Binding ThumbnailPath}"
+                                                   Stretch="UniformToFill"
+                                                   IsVisible="{Binding ThumbnailLoaded}"/>
+                                            <TextBlock Text="🎵"
+                                                       FontSize="18"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       IsVisible="{Binding !ThumbnailLoaded}"/>
+                                        </Panel>
+                                    </Border>
+
+                                    <!-- Metadata -->
+                                    <StackPanel Grid.Column="2" 
+                                                Margin="8,0,0,0"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Metadata.Artist}"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="12"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   IsVisible="{Binding Metadata.Artist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                        <TextBlock Text="{Binding Metadata.Title}"
+                                                   FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                                        <TextBlock Text="{Binding Metadata.Duration, StringFormat='{}{0:mm\\:ss}'}"
+                                                   FontSize="10"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                                    </StackPanel>
+
+                                    <!-- Remove Button -->
+                                    <Button Grid.Column="3"
+                                            Content="✕"
+                                            Command="{Binding $parent[ListBox].((vm:PlaylistComposerViewModel)DataContext).RemoveCommand}"
+                                            CommandParameter="{Binding}"
+                                            Width="28"
+                                            Height="28"
+                                            FontSize="14"
+                                            Padding="0"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            ToolTip.Tip="Remove from playlist"
+                                            VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    
+                    <!-- Empty State Message -->
+                    <Border Grid.Row="2"
+                            IsVisible="{Binding !ComposedPlaylist.Count}"
+                            Background="{DynamicResource SystemControlBackgroundAltMediumLowBrush}"
+                            CornerRadius="8"
+                            Padding="32">
+                        <StackPanel Spacing="12" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock Text="📋"
+                                       FontSize="48"
+                                       HorizontalAlignment="Center"
+                                       Opacity="0.5"/>
+                            <TextBlock Text="No songs in playlist"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                            <TextBlock Text="Select songs from the catalog and click '+' or 'Add Selected'"
+                                       FontSize="14"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                       TextWrapping="Wrap"
+                                       MaxWidth="300"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Composition Actions -->
+                    <StackPanel Grid.Row="3" 
+                                Orientation="Horizontal" 
+                                Spacing="8"
+                                Margin="0,12,0,0"
+                                HorizontalAlignment="Right">
+                        <Button Content="↑ Move Up"
+                                Command="{Binding MoveUpCommand}"
+                                IsEnabled="{Binding CanMoveUp}"
+                                Padding="12,6"
+                                ToolTip.Tip="Move selected song up"/>
+                        <Button Content="↓ Move Down"
+                                Command="{Binding MoveDownCommand}"
+                                IsEnabled="{Binding CanMoveDown}"
+                                Padding="12,6"
+                                ToolTip.Tip="Move selected song down"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Action Buttons Bar -->
+        <Border Grid.Row="2" 
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" 
+                BorderThickness="0,1,0,0"
+                Padding="16,12"
+                Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+            <Grid ColumnDefinitions="*,Auto">
+                
+                <!-- Left Side: Primary Actions -->
+                <StackPanel Grid.Column="0" 
+                            Orientation="Horizontal" 
+                            Spacing="8">
+                    <Button Content="➕ Add Selected"
+                            Command="{Binding AddSelectedCommand}"
+                            IsEnabled="{Binding HasSelectedCatalogItems}"
+                            Padding="16,8"
+                            FontWeight="SemiBold"
+                            ToolTip.Tip="Add selected songs to composition (Ctrl+A)"/>
+                    <Separator Width="1" 
+                               Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                               Margin="4,0"/>
+                    <Button Content="🗑 Clear All"
+                            Command="{Binding ClearCommand}"
+                            IsEnabled="{Binding ComposedPlaylist.Count}"
+                            Padding="12,8"
+                            ToolTip.Tip="Remove all songs from composition"/>
+                    <Button Content="🔀 Shuffle"
+                            Command="{Binding ShuffleCommand}"
+                            IsEnabled="{Binding ComposedPlaylist.Count}"
+                            Padding="12,8"
+                            ToolTip.Tip="Randomize playlist order"/>
+                </StackPanel>
+                
+                <!-- Right Side: File Operations -->
+                <StackPanel Grid.Column="1" 
+                            Orientation="Horizontal" 
+                            Spacing="8">
+                    <Button Content="📂 Load M3U"
+                            Command="{Binding LoadPlaylistCommand}"
+                            Padding="12,8"
+                            ToolTip.Tip="Load existing M3U playlist for editing"/>
+                    <Button Content="💾 Save M3U"
+                            Command="{Binding SavePlaylistCommand}"
+                            IsEnabled="{Binding ComposedPlaylist.Count}"
+                            Padding="12,8"
+                            ToolTip.Tip="Save playlist to M3U file"/>
+                    <Separator Width="1" 
+                               Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                               Margin="4,0"/>
+                    <Button Content="▶ Save &amp; Load for Play"
+                            Command="{Binding SaveAndLoadForPlayCommand}"
+                            IsEnabled="{Binding ComposedPlaylist.Count}"
+                            Padding="16,8"
+                            FontWeight="SemiBold"
+                            Classes="accent"
+                            ToolTip.Tip="Save and replace current playing playlist"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+
+</Window>

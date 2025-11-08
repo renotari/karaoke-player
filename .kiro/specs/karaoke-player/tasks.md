@@ -300,7 +300,12 @@ git status
   - Wire up to same ViewModels as Main Window
   - _Requirements: 6_
 
-- [ ] 20. Create Playlist Composer Window UI
+- [x] 20. Create Playlist Composer Window UI
+
+
+
+
+
   - Design PlaylistComposerWindow.axaml with two-pane layout
   - Create Catalog View (left pane) with search/filter box and artist filter dropdown
   - Implement multi-select support (Ctrl+Click, Shift+Click) in catalog list
