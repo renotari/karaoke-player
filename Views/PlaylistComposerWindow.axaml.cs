@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using KaraokePlayer.ViewModels;
+using KaraokePlayer.Services;
 
 namespace KaraokePlayer.Views;
 
@@ -22,6 +23,18 @@ public partial class PlaylistComposerWindow : Window
         
         // Set up keyboard shortcuts
         SetupKeyboardShortcuts();
+    }
+
+    public PlaylistComposerWindow(IMediaLibraryManager mediaLibraryManager, IPlaylistManager playlistManager)
+        : this()
+    {
+        DataContext = new PlaylistComposerViewModel(mediaLibraryManager, playlistManager);
+        
+        // Set window reference for file dialogs
+        if (DataContext is PlaylistComposerViewModel vm)
+        {
+            vm.SetWindow(this);
+        }
     }
 
     private void InitializeComponent()

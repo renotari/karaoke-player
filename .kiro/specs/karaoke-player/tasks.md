@@ -316,7 +316,12 @@ git status
   - Display total playlist duration
   - _Requirements: 23_
 
-- [ ] 21. Create Playlist Composer ViewModel
+- [x] 21. Create Playlist Composer ViewModel
+
+
+
+
+
   - Create PlaylistComposerViewModel with ReactiveUI
   - Implement properties: CatalogFiles, FilteredCatalogFiles, ComposedPlaylist, PlaylistName, SelectedCatalogItems
   - Implement commands: AddSelectedCommand, RemoveCommand, ReorderCommand, ClearCommand, ShuffleCommand
