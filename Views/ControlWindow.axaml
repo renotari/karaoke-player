@@ -1,0 +1,15 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:KaraokePlayer.ViewModels"
+        x:Class="KaraokePlayer.Views.ControlWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Karaoke Player - Control Window"
+        Width="900" Height="700"
+        MinWidth="700" MinHeight="500">
+    <Grid>
+        <TextBlock Text="Control Window - Dual Screen Mode" 
+                   HorizontalAlignment="Center" 
+                   VerticalAlignment="Center"
+                   FontSize="24"/>
+    </Grid>
+</Window>
