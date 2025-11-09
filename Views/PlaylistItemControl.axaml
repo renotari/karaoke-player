@@ -1,0 +1,135 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:KaraokePlayer.ViewModels"
+             x:Class="KaraokePlayer.Views.PlaylistItemControl"
+             x:DataType="vm:PlaylistItemViewModel">
+    
+    <UserControl.Styles>
+        <Style Selector="Border.playlist-item">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#3E3E42"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="8"/>
+        </Style>
+        
+        <Style Selector="Border.playlist-item:pointerover">
+            <Setter Property="Background" Value="#2D2D30"/>
+        </Style>
+        
+        <Style Selector="Border.playlist-item.playing">
+            <Setter Property="Background" Value="#0E639C"/>
+        </Style>
+        
+        <Style Selector="Border.playlist-item.error">
+            <Setter Property="Background" Value="#3D1F1F"/>
+        </Style>
+        
+        <Style Selector="Border.playlist-item.duplicate">
+            <Setter Property="Background" Value="#3D3D1F"/>
+        </Style>
+        
+        <Style Selector="TextBlock.title">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        
+        <Style Selector="TextBlock.artist">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+        </Style>
+        
+        <Style Selector="TextBlock.duration">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="#999999"/>
+        </Style>
+        
+        <Style Selector="TextBlock.error-icon">
+            <Setter Property="Foreground" Value="#E81123"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+        
+        <Style Selector="TextBlock.duplicate-icon">
+            <Setter Property="Foreground" Value="#FFA500"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        
+        <Style Selector="TextBlock.playing-icon">
+            <Setter Property="Foreground" Value="#00FF00"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+    </UserControl.Styles>
+    
+    <Border Classes="playlist-item"
+            Classes.playing="{Binding IsPlaying}"
+            Classes.error="{Binding HasError}"
+            Classes.duplicate="{Binding IsDuplicate}"
+            ToolTip.Tip="{Binding ErrorTooltip}"
+            ToolTip.ShowDelay="500">
+        
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+            <!-- Position -->
+            <TextBlock Grid.Column="0"
+                       Text="{Binding Position}"
+                       VerticalAlignment="Center"
+                       Margin="0,0,8,0"
+                       FontSize="11"
+                       Foreground="#999999"
+                       Width="24"/>
+            
+            <!-- Thumbnail -->
+            <Border Grid.Column="1"
+                    Width="48"
+                    Height="36"
+                    CornerRadius="2"
+                    Margin="0,0,8,0"
+                    Background="#1E1E1E">
+                <Image Source="{Binding ThumbnailPath}"
+                       Stretch="UniformToFill"
+                       IsVisible="{Binding ThumbnailPath, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+            </Border>
+            
+            <!-- Song Info -->
+            <StackPanel Grid.Column="2"
+                        VerticalAlignment="Center">
+                <TextBlock Classes="title"
+                           Text="{Binding DisplayTitle}"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock Classes="artist"
+                           Text="{Binding DisplayArtist}"
+                           TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+            
+            <!-- Duration -->
+            <TextBlock Grid.Column="3"
+                       Classes="duration"
+                       Text="{Binding Duration}"
+                       VerticalAlignment="Center"
+                       Margin="8,0"/>
+            
+            <!-- Status Icons -->
+            <StackPanel Grid.Column="4"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        Spacing="4">
+                
+                <!-- Playing indicator -->
+                <TextBlock Classes="playing-icon"
+                           Text="▶"
+                           IsVisible="{Binding IsPlaying}"/>
+                
+                <!-- Duplicate indicator -->
+                <TextBlock Classes="duplicate-icon"
+                           Text="⚠"
+                           IsVisible="{Binding IsDuplicate}"
+                           ToolTip.Tip="This song is already in the playlist"/>
+                
+                <!-- Error indicator -->
+                <TextBlock Classes="error-icon"
+                           Text="⚠"
+                           IsVisible="{Binding HasError}"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

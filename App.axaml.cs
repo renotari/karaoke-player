@@ -24,6 +24,8 @@ public partial class App : Application
     private IMediaPlayerController? _mediaPlayerController;
     private IMediaLibraryManager? _mediaLibraryManager;
     private IKeyboardShortcutManager? _keyboardShortcutManager;
+    private INotificationService? _notificationService;
+    private IErrorHandlingService? _errorHandlingService;
     private MainWindowViewModel? _mainWindowViewModel;
 
     public override void Initialize()
@@ -82,11 +84,16 @@ public partial class App : Application
             _dbContext.Database.EnsureCreated();
 
             // Create service instances
+            _notificationService = new NotificationService();
+            _errorHandlingService = new ErrorHandlingService(_notificationService);
             _searchEngine = new SearchEngine(_dbContext);
             _playlistManager = new PlaylistManager(_dbContext);
             _mediaPlayerController = new MediaPlayerController();
             _mediaLibraryManager = new MediaLibraryManager(_dbContext);
             _keyboardShortcutManager = new KeyboardShortcutManager();
+
+            // Clear all error states on application startup (Requirement 18.13)
+            _errorHandlingService.ClearAllErrors();
         }
         catch (Exception ex)
         {
@@ -100,13 +107,15 @@ public partial class App : Application
     {
         // If services are available, use the full constructor
         if (_searchEngine != null && _playlistManager != null && 
-            _mediaPlayerController != null && _mediaLibraryManager != null)
+            _mediaPlayerController != null && _mediaLibraryManager != null &&
+            _notificationService != null)
         {
             return new MainWindowViewModel(
                 _searchEngine,
                 _playlistManager,
                 _mediaPlayerController,
-                _mediaLibraryManager
+                _mediaLibraryManager,
+                _notificationService
             );
         }
 

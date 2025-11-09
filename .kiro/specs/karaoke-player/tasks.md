@@ -376,7 +376,13 @@ git status
   - Make shortcuts customizable via Settings
   - _Requirements: 4, 12, 19_
 
-- [ ] 25. Implement error handling and user notifications
+- [x] 25. Implement error handling and user notifications
+
+
+
+
+
+
   - Create error indicator UI components for playlist items
   - Implement toast notification system for system errors (bottom-right)
   - Handle corrupted file errors: skip to next song, mark with error indicator

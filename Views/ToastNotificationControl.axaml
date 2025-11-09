@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:KaraokePlayer.Models"
+             x:Class="KaraokePlayer.Views.ToastNotificationControl"
+             x:DataType="models:ToastNotification">
+    
+    <UserControl.Styles>
+        <Style Selector="Border.toast">
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="BorderBrush" Value="#3E3E42"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="MinWidth" Value="300"/>
+            <Setter Property="MaxWidth" Value="400"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        
+        <Style Selector="Border.toast.info">
+            <Setter Property="BorderBrush" Value="#0E639C"/>
+        </Style>
+        
+        <Style Selector="Border.toast.success">
+            <Setter Property="BorderBrush" Value="#107C10"/>
+        </Style>
+        
+        <Style Selector="Border.toast.warning">
+            <Setter Property="BorderBrush" Value="#FFA500"/>
+        </Style>
+        
+        <Style Selector="Border.toast.error">
+            <Setter Property="BorderBrush" Value="#E81123"/>
+        </Style>
+        
+        <Style Selector="TextBlock.toast-title">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        
+        <Style Selector="TextBlock.toast-message">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,4,0,0"/>
+        </Style>
+        
+        <Style Selector="Button.close-button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="4"/>
+        </Style>
+        
+        <Style Selector="Button.close-button:pointerover">
+            <Setter Property="Background" Value="#3E3E42"/>
+        </Style>
+    </UserControl.Styles>
+    
+    <Border Name="ToastBorder" Classes="toast"
+            Classes.info="{Binding Type, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"
+            Classes.success="{Binding Type, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=1}"
+            Classes.warning="{Binding Type, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=2}"
+            Classes.error="{Binding Type, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=3}"
+            IsVisible="{Binding IsVisible}">
+        
+        <Grid ColumnDefinitions="*,Auto">
+            <!-- Content -->
+            <StackPanel Grid.Column="0">
+                <TextBlock Classes="toast-title"
+                           Text="{Binding Title}"/>
+                <TextBlock Classes="toast-message"
+                           Text="{Binding Message}"/>
+            </StackPanel>
+            
+            <!-- Close button -->
+            <Button Grid.Column="1"
+                    Classes="close-button"
+                    VerticalAlignment="Top"
+                    Margin="8,0,0,0"
+                    Click="CloseButton_Click">
+                <TextBlock Text="✕" FontSize="12" Foreground="#CCCCCC"/>
+            </Button>
+        </Grid>
+    </Border>
+</UserControl>

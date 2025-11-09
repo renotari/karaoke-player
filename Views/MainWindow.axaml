@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:KaraokePlayer.ViewModels"
+        xmlns:views="using:KaraokePlayer.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
@@ -48,7 +49,10 @@
         </Style>
     </Window.Styles>
 
-    <Grid RowDefinitions="Auto,*,Auto,Auto">
+    <!-- Root Panel to hold both main content and toast notifications -->
+    <Panel>
+        <!-- Main Content Grid -->
+        <Grid RowDefinitions="Auto,*,Auto,Auto">
         
         <!-- Menu Bar -->
         <Menu Grid.Row="0">
@@ -567,6 +571,19 @@
                 </StackPanel>
             </Grid>
         </Border>
-    </Grid>
+        </Grid>
+
+        <!-- Toast Notification Container (Overlay at bottom-right) -->
+        <ItemsControl ItemsSource="{Binding NotificationService.Notifications}"
+                      VerticalAlignment="Bottom"
+                      HorizontalAlignment="Right"
+                      Margin="0,0,16,80">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <views:ToastNotificationControl NotificationService="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).NotificationService}"/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Panel>
 
 </Window>

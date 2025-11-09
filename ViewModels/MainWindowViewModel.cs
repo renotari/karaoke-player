@@ -16,6 +16,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IPlaylistManager? _playlistManager;
     private readonly IMediaPlayerController? _mediaPlayerController;
     private readonly IMediaLibraryManager? _mediaLibraryManager;
+    private readonly INotificationService? _notificationService;
 
     private string _searchQuery = string.Empty;
     private MediaFile? _selectedMediaFile;
@@ -61,12 +62,14 @@ public partial class MainWindowViewModel : ViewModelBase
         ISearchEngine searchEngine,
         IPlaylistManager playlistManager,
         IMediaPlayerController mediaPlayerController,
-        IMediaLibraryManager mediaLibraryManager)
+        IMediaLibraryManager mediaLibraryManager,
+        INotificationService notificationService)
     {
         _searchEngine = searchEngine ?? throw new ArgumentNullException(nameof(searchEngine));
         _playlistManager = playlistManager ?? throw new ArgumentNullException(nameof(playlistManager));
         _mediaPlayerController = mediaPlayerController ?? throw new ArgumentNullException(nameof(mediaPlayerController));
         _mediaLibraryManager = mediaLibraryManager ?? throw new ArgumentNullException(nameof(mediaLibraryManager));
+        _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
 
         // Initialize collections
         MediaFiles = new ObservableCollection<MediaFile>();
@@ -298,6 +301,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<MediaFile> FilteredMediaFiles { get; }
     public ObservableCollection<PlaylistItemViewModel> CurrentPlaylist { get; }
 
+    // Services (exposed for binding)
+    public INotificationService? NotificationService => _notificationService;
+
     // Commands
     public ReactiveCommand<Unit, Unit> ClearSearchCommand { get; private set; } = null!;
     public ReactiveCommand<string, Unit> SearchCommand { get; private set; } = null!;
@@ -392,7 +398,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     IsDuplicate = isDuplicate
                 };
 
-                var viewModel = new PlaylistItemViewModel(playlistItem);
+                var viewModel = new PlaylistItemViewModel(playlistItem, mediaFile);
 
                 if (position == "next" && CurrentPlaylist.Count > 0)
                 {
@@ -419,7 +425,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     IsDuplicate = CurrentPlaylist.Any(p => p.PlaylistItem.MediaFileId == mediaFile.Id)
                 };
 
-                var viewModel = new PlaylistItemViewModel(playlistItem);
+                var viewModel = new PlaylistItemViewModel(playlistItem, mediaFile);
 
                 if (position == "next" && CurrentPlaylist.Count > 0)
                 {
@@ -751,7 +757,10 @@ public partial class MainWindowViewModel : ViewModelBase
         var servicePlaylist = _playlistManager.GetCurrentPlaylist();
         foreach (var item in servicePlaylist)
         {
-            CurrentPlaylist.Add(new PlaylistItemViewModel(item));
+            if (item.MediaFile != null)
+            {
+                CurrentPlaylist.Add(new PlaylistItemViewModel(item, item.MediaFile));
+            }
         }
     }
 
