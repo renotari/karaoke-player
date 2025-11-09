@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -13,13 +14,15 @@ using ReactiveUI;
 
 namespace KaraokePlayer.ViewModels;
 
-public class SettingsViewModel : ViewModelBase
+public class SettingsViewModel : ViewModelBase, IDisposable
 {
     private readonly ISettingsManager _settingsManager;
     private readonly IMediaPlayerController? _mediaPlayerController;
     private readonly Window? _owner;
+    private readonly CompositeDisposable _disposables = new();
     private AppSettings _originalSettings;
     private AppSettings _workingSettings;
+    private bool _disposed;
 
     // General Tab
     private string _mediaDirectory = string.Empty;
@@ -64,34 +67,10 @@ public class SettingsViewModel : ViewModelBase
         // Load current settings
         _originalSettings = _settingsManager.GetSettings();
         _workingSettings = CloneSettings(_originalSettings);
-        LoadFromSettings(_workingSettings);
-
-        // Initialize audio devices
+        
+        // Initialize collections
         AudioDevices = new ObservableCollection<string>();
-        LoadAudioDevices();
-
-        // Initialize keyboard shortcuts
-        KeyboardShortcuts = new ObservableCollection<KeyboardShortcutItem>
-        {
-            new KeyboardShortcutItem { Action = "Play/Pause", Shortcut = "Space", DefaultShortcut = "Space" },
-            new KeyboardShortcutItem { Action = "Next Track", Shortcut = "Right", DefaultShortcut = "Right" },
-            new KeyboardShortcutItem { Action = "Previous Track", Shortcut = "Left", DefaultShortcut = "Left" },
-            new KeyboardShortcutItem { Action = "Volume Up", Shortcut = "Up", DefaultShortcut = "Up" },
-            new KeyboardShortcutItem { Action = "Volume Down", Shortcut = "Down", DefaultShortcut = "Down" },
-            new KeyboardShortcutItem { Action = "Mute/Unmute", Shortcut = "M", DefaultShortcut = "M" },
-            new KeyboardShortcutItem { Action = "Toggle Fullscreen", Shortcut = "F11", DefaultShortcut = "F11" },
-            new KeyboardShortcutItem { Action = "Add to Playlist (End)", Shortcut = "Ctrl+A", DefaultShortcut = "Ctrl+A" },
-            new KeyboardShortcutItem { Action = "Add to Playlist (Next)", Shortcut = "Ctrl+Shift+A", DefaultShortcut = "Ctrl+Shift+A" },
-            new KeyboardShortcutItem { Action = "Remove from Playlist", Shortcut = "Delete", DefaultShortcut = "Delete" },
-            new KeyboardShortcutItem { Action = "Clear Playlist", Shortcut = "Ctrl+L", DefaultShortcut = "Ctrl+L" },
-            new KeyboardShortcutItem { Action = "Shuffle Playlist", Shortcut = "Ctrl+S", DefaultShortcut = "Ctrl+S" },
-            new KeyboardShortcutItem { Action = "Focus Search", Shortcut = "Ctrl+F", DefaultShortcut = "Ctrl+F" },
-            new KeyboardShortcutItem { Action = "Open Playlist Composer", Shortcut = "Ctrl+P", DefaultShortcut = "Ctrl+P" },
-            new KeyboardShortcutItem { Action = "Open Settings", Shortcut = "Ctrl+,", DefaultShortcut = "Ctrl+," },
-            new KeyboardShortcutItem { Action = "Refresh Library", Shortcut = "Ctrl+R", DefaultShortcut = "Ctrl+R" },
-            new KeyboardShortcutItem { Action = "Toggle Display Mode", Shortcut = "Ctrl+D", DefaultShortcut = "Ctrl+D" },
-            new KeyboardShortcutItem { Action = "Exit Fullscreen/Close Dialog", Shortcut = "Escape", DefaultShortcut = "Escape" }
-        };
+        KeyboardShortcuts = new ObservableCollection<KeyboardShortcutItem>();
 
         // Commands
         BrowseMediaDirectoryCommand = ReactiveCommand.CreateFromTask(BrowseMediaDirectoryAsync);
@@ -104,6 +83,11 @@ public class SettingsViewModel : ViewModelBase
 
         // Set up validation
         SetupValidation();
+        
+        // Load data (after commands are set up)
+        LoadAudioDevices();
+        LoadKeyboardShortcuts();
+        LoadFromSettings(_workingSettings);
     }
 
     #region Properties
@@ -112,11 +96,7 @@ public class SettingsViewModel : ViewModelBase
     public string MediaDirectory
     {
         get => _mediaDirectory;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _mediaDirectory, value);
-            ValidateMediaDirectory();
-        }
+        set => this.RaiseAndSetIfChanged(ref _mediaDirectory, value);
     }
 
     public int DisplayModeIndex
@@ -146,12 +126,6 @@ public class SettingsViewModel : ViewModelBase
             // Clamp value between 0 and 100
             var clampedValue = Math.Max(0, Math.Min(100, value));
             this.RaiseAndSetIfChanged(ref _volumePercent, clampedValue);
-            
-            // Real-time preview: update media player volume
-            if (_mediaPlayerController != null)
-            {
-                _mediaPlayerController.SetVolume((float)(clampedValue / 100.0));
-            }
         }
     }
 
@@ -166,54 +140,19 @@ public class SettingsViewModel : ViewModelBase
     public string SelectedAudioDevice
     {
         get => _selectedAudioDevice;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _selectedAudioDevice, value);
-            
-            // Real-time preview: update audio device
-            if (_mediaPlayerController != null && !string.IsNullOrEmpty(value))
-            {
-                try
-                {
-                    _mediaPlayerController.SetAudioDevice(value);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error setting audio device: {ex.Message}");
-                }
-            }
-        }
+        set => this.RaiseAndSetIfChanged(ref _selectedAudioDevice, value);
     }
 
     public bool CrossfadeEnabled
     {
         get => _crossfadeEnabled;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _crossfadeEnabled, value);
-            
-            // Real-time preview: update crossfade setting
-            if (_mediaPlayerController != null)
-            {
-                _mediaPlayerController.EnableCrossfade(value, _crossfadeDuration);
-            }
-        }
+        set => this.RaiseAndSetIfChanged(ref _crossfadeEnabled, value);
     }
 
     public int CrossfadeDuration
     {
         get => _crossfadeDuration;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _crossfadeDuration, value);
-            ValidateCrossfadeDuration();
-            
-            // Real-time preview: update crossfade duration
-            if (_mediaPlayerController != null && _crossfadeEnabled)
-            {
-                _mediaPlayerController.EnableCrossfade(_crossfadeEnabled, value);
-            }
-        }
+        set => this.RaiseAndSetIfChanged(ref _crossfadeDuration, value);
     }
 
     // Display Tab
@@ -226,11 +165,7 @@ public class SettingsViewModel : ViewModelBase
     public int FontSize
     {
         get => _fontSize;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _fontSize, value);
-            ValidateFontSize();
-        }
+        set => this.RaiseAndSetIfChanged(ref _fontSize, value);
     }
 
     public int VisualizationStyleIndex
@@ -246,21 +181,13 @@ public class SettingsViewModel : ViewModelBase
     public int PreloadBufferSize
     {
         get => _preloadBufferSize;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _preloadBufferSize, value);
-            ValidatePreloadBufferSize();
-        }
+        set => this.RaiseAndSetIfChanged(ref _preloadBufferSize, value);
     }
 
     public int CacheSize
     {
         get => _cacheSize;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _cacheSize, value);
-            ValidateCacheSize();
-        }
+        set => this.RaiseAndSetIfChanged(ref _cacheSize, value);
     }
 
     // Validation error properties
@@ -353,17 +280,22 @@ public class SettingsViewModel : ViewModelBase
 
     private async Task ResetToDefaultsAsync()
     {
-        // Create default settings
-        var defaults = CreateDefaultSettings();
-        LoadFromSettings(defaults);
+        // Use SettingsManager to get defaults
+        await _settingsManager.ResetToDefaultsAsync();
+        var defaults = _settingsManager.GetSettings();
         
-        // Reset keyboard shortcuts
+        // Update working copy
+        _workingSettings = CloneSettings(defaults);
+        LoadFromSettings(_workingSettings);
+        
+        // Reset keyboard shortcuts to defaults
         foreach (var shortcut in KeyboardShortcuts)
         {
             shortcut.Shortcut = shortcut.DefaultShortcut;
         }
-
-        await Task.CompletedTask;
+        
+        // Clear validation errors
+        ClearValidationErrors();
     }
 
     private async Task OkAsync()
@@ -374,6 +306,12 @@ public class SettingsViewModel : ViewModelBase
 
     private void Cancel()
     {
+        // Revert to original settings (discard working copy)
+        _workingSettings = CloneSettings(_originalSettings);
+        
+        // Clear any validation errors
+        ClearValidationErrors();
+        
         CloseWindow();
     }
 
@@ -418,14 +356,63 @@ public class SettingsViewModel : ViewModelBase
 
     private void SetupValidation()
     {
-        // Validate on property changes
-        this.WhenAnyValue(
+        // Validate on property changes and dispose subscription when ViewModel is disposed
+        var subscription = this.WhenAnyValue(
             x => x.MediaDirectoryError,
             x => x.CrossfadeDurationError,
             x => x.FontSizeError,
             x => x.PreloadBufferSizeError,
             x => x.CacheSizeError)
             .Subscribe(_ => this.RaisePropertyChanged(nameof(HasValidationErrors)));
+        
+        _disposables.Add(subscription);
+    }
+
+    private void ClearValidationErrors()
+    {
+        MediaDirectoryError = null;
+        CrossfadeDurationError = null;
+        FontSizeError = null;
+        PreloadBufferSizeError = null;
+        CacheSizeError = null;
+    }
+
+    private void LoadKeyboardShortcuts()
+    {
+        // TODO: Load from settings when keyboard shortcuts are added to AppSettings
+        // For now, use default shortcuts
+        var defaultShortcuts = new[]
+        {
+            ("Play/Pause", "Space"),
+            ("Next Track", "Right"),
+            ("Previous Track", "Left"),
+            ("Volume Up", "Up"),
+            ("Volume Down", "Down"),
+            ("Mute/Unmute", "M"),
+            ("Toggle Fullscreen", "F11"),
+            ("Add to Playlist (End)", "Ctrl+A"),
+            ("Add to Playlist (Next)", "Ctrl+Shift+A"),
+            ("Remove from Playlist", "Delete"),
+            ("Clear Playlist", "Ctrl+L"),
+            ("Shuffle Playlist", "Ctrl+S"),
+            ("Focus Search", "Ctrl+F"),
+            ("Open Playlist Composer", "Ctrl+P"),
+            ("Open Settings", "Ctrl+,"),
+            ("Refresh Library", "Ctrl+R"),
+            ("Toggle Display Mode", "Ctrl+D"),
+            ("Exit Fullscreen/Close Dialog", "Escape")
+        };
+
+        KeyboardShortcuts.Clear();
+        foreach (var (action, shortcut) in defaultShortcuts)
+        {
+            KeyboardShortcuts.Add(new KeyboardShortcutItem
+            {
+                Action = action,
+                Shortcut = shortcut,
+                DefaultShortcut = shortcut
+            });
+        }
     }
 
     private void LoadAudioDevices()
@@ -624,35 +611,33 @@ public class SettingsViewModel : ViewModelBase
         };
     }
 
-    private AppSettings CreateDefaultSettings()
-    {
-        var userMediaPath = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
-        
-        return new AppSettings
-        {
-            Id = "default",
-            MediaDirectory = userMediaPath,
-            DisplayMode = DisplayMode.Single,
-            Volume = 0.8,
-            AudioBoostEnabled = false,
-            AudioOutputDevice = "default",
-            CrossfadeEnabled = false,
-            CrossfadeDuration = 3,
-            AutoPlayEnabled = true,
-            ShuffleMode = false,
-            VisualizationStyle = "bars",
-            Theme = "dark",
-            FontSize = 14,
-            PreloadBufferSize = 50,
-            CacheSize = 500,
-            CreatedAt = DateTime.UtcNow,
-            LastModified = DateTime.UtcNow
-        };
-    }
-
     private void CloseWindow()
     {
         _owner?.Close();
+    }
+
+    #endregion
+
+    #region IDisposable
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            // Dispose managed resources
+            _disposables?.Dispose();
+        }
+
+        _disposed = true;
     }
 
     #endregion

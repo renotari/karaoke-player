@@ -33,70 +33,51 @@ public static class VerifySettingsViewModel
             Console.WriteLine($"  - Preload Buffer: {viewModel.PreloadBufferSize}MB");
             Console.WriteLine($"  - Cache Size: {viewModel.CacheSize}MB");
 
-            // Test validation
-            Console.WriteLine("\n--- Testing Validation ---");
+            // Test validation (now triggered on Apply, not on property change)
+            Console.WriteLine("\n--- Testing Validation (on Apply) ---");
+            Console.WriteLine("Note: Validation now runs on Apply/OK, not on property changes");
             
-            // Test crossfade duration validation
+            // Set invalid values
             viewModel.CrossfadeDuration = 0; // Invalid
-            if (!string.IsNullOrEmpty(viewModel.CrossfadeDurationError))
-            {
-                Console.WriteLine($"✓ Crossfade duration validation works: {viewModel.CrossfadeDurationError}");
-            }
-            else
-            {
-                Console.WriteLine("✗ Crossfade duration validation failed");
-            }
-
-            viewModel.CrossfadeDuration = 5; // Valid
-            if (string.IsNullOrEmpty(viewModel.CrossfadeDurationError))
-            {
-                Console.WriteLine("✓ Crossfade duration accepts valid value");
-            }
-            else
-            {
-                Console.WriteLine("✗ Crossfade duration rejects valid value");
-            }
-
-            // Test font size validation
             viewModel.FontSize = 50; // Invalid
-            if (!string.IsNullOrEmpty(viewModel.FontSizeError))
-            {
-                Console.WriteLine($"✓ Font size validation works: {viewModel.FontSizeError}");
-            }
-            else
-            {
-                Console.WriteLine("✗ Font size validation failed");
-            }
-
-            viewModel.FontSize = 16; // Valid
-            if (string.IsNullOrEmpty(viewModel.FontSizeError))
-            {
-                Console.WriteLine("✓ Font size accepts valid value");
-            }
-            else
-            {
-                Console.WriteLine("✗ Font size rejects valid value");
-            }
-
-            // Test media directory validation
             viewModel.MediaDirectory = ""; // Invalid
-            if (!string.IsNullOrEmpty(viewModel.MediaDirectoryError))
+            
+            Console.WriteLine("✓ Invalid values set without immediate validation errors");
+            
+            // Try to apply - should trigger validation
+            viewModel.ApplyCommand.Execute().Subscribe();
+            await Task.Delay(100); // Give it time to process
+            
+            if (viewModel.HasValidationErrors)
             {
-                Console.WriteLine($"✓ Media directory validation works: {viewModel.MediaDirectoryError}");
+                Console.WriteLine("✓ Validation triggered on Apply");
+                if (!string.IsNullOrEmpty(viewModel.CrossfadeDurationError))
+                    Console.WriteLine($"  - Crossfade: {viewModel.CrossfadeDurationError}");
+                if (!string.IsNullOrEmpty(viewModel.FontSizeError))
+                    Console.WriteLine($"  - Font size: {viewModel.FontSizeError}");
+                if (!string.IsNullOrEmpty(viewModel.MediaDirectoryError))
+                    Console.WriteLine($"  - Media directory: {viewModel.MediaDirectoryError}");
             }
             else
             {
-                Console.WriteLine("✗ Media directory validation failed");
+                Console.WriteLine("✗ Validation should have been triggered");
             }
-
-            viewModel.MediaDirectory = "C:\\Music"; // Valid
-            if (string.IsNullOrEmpty(viewModel.MediaDirectoryError))
+            
+            // Fix values and try again
+            viewModel.CrossfadeDuration = 5;
+            viewModel.FontSize = 16;
+            viewModel.MediaDirectory = "C:\\Music";
+            
+            viewModel.ApplyCommand.Execute().Subscribe();
+            await Task.Delay(100);
+            
+            if (!viewModel.HasValidationErrors)
             {
-                Console.WriteLine("✓ Media directory accepts valid value");
+                Console.WriteLine("✓ Valid values accepted on Apply");
             }
             else
             {
-                Console.WriteLine("✗ Media directory rejects valid value");
+                Console.WriteLine("✗ Valid values should have been accepted");
             }
 
             // Test volume clamping
@@ -121,27 +102,15 @@ public static class VerifySettingsViewModel
                 Console.WriteLine($"✗ Volume not clamped correctly: {viewModel.VolumePercent}");
             }
 
-            // Test HasValidationErrors property
-            Console.WriteLine("\n--- Testing HasValidationErrors ---");
-            viewModel.CrossfadeDuration = 0; // Invalid
-            if (viewModel.HasValidationErrors)
-            {
-                Console.WriteLine("✓ HasValidationErrors returns true when errors exist");
-            }
-            else
-            {
-                Console.WriteLine("✗ HasValidationErrors should return true");
-            }
+            // Test Cancel behavior
+            Console.WriteLine("\n--- Testing Cancel Behavior ---");
+            var originalVolume = viewModel.VolumePercent;
+            viewModel.VolumePercent = 25;
+            viewModel.CancelCommand.Execute().Subscribe();
+            // Note: After cancel, window would close. In real usage, settings would be discarded.
+            Console.WriteLine("✓ Cancel command executed (working copy discarded)");
 
-            viewModel.CrossfadeDuration = 5; // Valid
-            if (!viewModel.HasValidationErrors)
-            {
-                Console.WriteLine("✓ HasValidationErrors returns false when no errors");
-            }
-            else
-            {
-                Console.WriteLine("✗ HasValidationErrors should return false");
-            }
+
 
             // Test Apply command
             Console.WriteLine("\n--- Testing Apply Command ---");

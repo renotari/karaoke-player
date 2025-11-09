@@ -44,11 +44,19 @@ Each validation error is exposed as a separate property (e.g., `MediaDirectoryEr
 - **OkCommand**: Disabled when validation errors exist
 - **ApplyCommand**: Disabled when validation errors exist, validates all settings before applying
 - **ResetToDefaultsCommand**: Resets all settings including keyboard shortcuts
+- **CancelCommand**: Reverts working copy and clears validation errors
 
 #### 7. **Reactive Property Setup**
 - `SetupValidation()` method subscribes to validation error changes
 - Automatically raises `HasValidationErrors` property changed event
 - Ensures UI stays synchronized with validation state
+- Subscriptions are properly disposed via `CompositeDisposable`
+
+### 8. **Resource Management**
+- Implements `IDisposable` pattern for proper cleanup
+- All reactive subscriptions stored in `CompositeDisposable`
+- Prevents memory leaks when ViewModel is destroyed
+- Follows standard dispose pattern with `Dispose(bool disposing)`
 
 ### Architecture Improvements
 
@@ -81,10 +89,12 @@ User Input → Property Setter → Validate → Apply to Media Player (if valid)
    - Added validation error properties
    - Added `HasValidationErrors` computed property
    - Implemented validation methods for each validated property
-   - Added real-time preview in property setters
+   - Removed real-time preview (validation deferred to Apply/OK)
    - Added audio device detection
    - Enhanced command creation with `CanExecute` conditions
    - Added `SetupValidation()` method for reactive subscriptions
+   - Implemented `IDisposable` for proper resource cleanup
+   - Added `CompositeDisposable` for subscription management
 
 ### Files Created
 
@@ -115,20 +125,20 @@ The implementation includes a verification script (`VerifySettingsViewModel.cs`)
 
 ### Requirement 10: Settings Interface
 ✅ All settings properties bound to SettingsManager
-✅ Validation for all configurable values
-✅ Real-time application of changes where applicable
+✅ Validation for all configurable values (deferred to Apply/OK)
+✅ Working copy pattern for safe editing
 ✅ Reset to defaults functionality
-✅ Apply and Cancel commands
+✅ Apply and Cancel commands with proper behavior
 
 ### Requirement 11: Global Volume Control
-✅ Volume property with real-time preview
+✅ Volume property with validation
 ✅ Volume clamping to valid range (0-100%)
 ✅ Audio boost setting
-✅ Immediate application to media player
+✅ Changes applied on Apply/OK
 
 ### Requirement 22: Audio Output Device Selection
 ✅ Detection and listing of available audio devices
-✅ Device selection with real-time application
+✅ Device selection with proper persistence
 ✅ Test audio button (command infrastructure in place)
 ✅ Graceful fallback when devices unavailable
 
@@ -142,15 +152,14 @@ The implementation includes a verification script (`VerifySettingsViewModel.cs`)
 
 ### With MediaPlayerController
 - `GetAudioDevices()`: Retrieve available audio output devices
-- `SetVolume()`: Apply volume changes in real-time
-- `SetAudioDevice()`: Apply device selection in real-time
-- `EnableCrossfade()`: Apply crossfade settings in real-time
+- Changes applied only on Apply/OK (no real-time preview)
+- Proper working copy pattern maintained
 
 ### With UI (SettingsWindow)
 - All properties are reactive and bindable
 - Validation errors can be displayed in UI
 - Commands have proper `CanExecute` conditions
-- Real-time preview provides immediate feedback
+- Changes only applied when user clicks Apply/OK
 
 ## Usage Example
 
@@ -168,6 +177,16 @@ var viewModel = new SettingsViewModel(
 );
 
 // Bind to UI
+var settingsWindow = new SettingsWindow
+{
+    DataContext = viewModel
+};
+
+// Show dialog
+await settingsWindow.ShowDialog(ownerWindow);
+
+// Dispose when done
+viewModel.Dispose();
 var settingsWindow = new SettingsWindow
 {
     DataContext = viewModel
