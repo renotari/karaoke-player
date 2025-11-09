@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
+using Avalonia.Input;
 using System;
 using System.IO;
 using System.Linq;
@@ -22,6 +23,8 @@ public partial class App : Application
     private IPlaylistManager? _playlistManager;
     private IMediaPlayerController? _mediaPlayerController;
     private IMediaLibraryManager? _mediaLibraryManager;
+    private IKeyboardShortcutManager? _keyboardShortcutManager;
+    private MainWindowViewModel? _mainWindowViewModel;
 
     public override void Initialize()
     {
@@ -40,10 +43,15 @@ public partial class App : Application
             InitializeServices();
 
             // Create main window with services injected
-            desktop.MainWindow = new MainWindow
+            _mainWindowViewModel = CreateMainWindowViewModel();
+            var mainWindow = new MainWindow
             {
-                DataContext = CreateMainWindowViewModel(),
+                DataContext = _mainWindowViewModel,
             };
+            desktop.MainWindow = mainWindow;
+
+            // Set up global keyboard shortcuts
+            SetupKeyboardShortcuts(mainWindow);
 
             // Cleanup on exit
             desktop.ShutdownRequested += OnShutdownRequested;
@@ -78,6 +86,7 @@ public partial class App : Application
             _playlistManager = new PlaylistManager(_dbContext);
             _mediaPlayerController = new MediaPlayerController();
             _mediaLibraryManager = new MediaLibraryManager(_dbContext);
+            _keyboardShortcutManager = new KeyboardShortcutManager();
         }
         catch (Exception ex)
         {
@@ -119,6 +128,42 @@ public partial class App : Application
         }
 
         _dbContext?.Dispose();
+    }
+
+    private void SetupKeyboardShortcuts(MainWindow mainWindow)
+    {
+        if (_keyboardShortcutManager == null || _mainWindowViewModel == null)
+            return;
+
+        // Register shortcut handlers
+        _keyboardShortcutManager.RegisterShortcut("PlayPause", () => _mainWindowViewModel.PlayPauseCommand?.Execute(System.Reactive.Unit.Default));
+        _keyboardShortcutManager.RegisterShortcut("Stop", () => _mainWindowViewModel.StopCommand?.Execute(System.Reactive.Unit.Default));
+        _keyboardShortcutManager.RegisterShortcut("Next", () => _mainWindowViewModel.NextCommand?.Execute(System.Reactive.Unit.Default));
+        _keyboardShortcutManager.RegisterShortcut("Previous", () => _mainWindowViewModel.PreviousCommand?.Execute(System.Reactive.Unit.Default));
+        _keyboardShortcutManager.RegisterShortcut("VolumeUp", () => _mainWindowViewModel.VolumeUp());
+        _keyboardShortcutManager.RegisterShortcut("VolumeDown", () => _mainWindowViewModel.VolumeDown());
+        _keyboardShortcutManager.RegisterShortcut("Mute", () => _mainWindowViewModel.ToggleMute());
+        _keyboardShortcutManager.RegisterShortcut("ToggleFullscreen", () => _mainWindowViewModel.ToggleFullscreen());
+        _keyboardShortcutManager.RegisterShortcut("AddToPlaylistEnd", () => _mainWindowViewModel.AddSelectedToPlaylistEnd());
+        _keyboardShortcutManager.RegisterShortcut("AddToPlaylistNext", () => _mainWindowViewModel.AddSelectedToPlaylistNext());
+        _keyboardShortcutManager.RegisterShortcut("RemoveFromPlaylist", () => _mainWindowViewModel.RemoveSelectedFromPlaylist());
+        _keyboardShortcutManager.RegisterShortcut("ClearPlaylist", () => _mainWindowViewModel.ClearPlaylistCommand?.Execute(System.Reactive.Unit.Default));
+        _keyboardShortcutManager.RegisterShortcut("ShufflePlaylist", () => _mainWindowViewModel.ShufflePlaylistCommand?.Execute(System.Reactive.Unit.Default));
+        _keyboardShortcutManager.RegisterShortcut("FocusSearch", () => mainWindow.FocusSearchBox());
+        _keyboardShortcutManager.RegisterShortcut("OpenPlaylistComposer", () => _mainWindowViewModel.OpenPlaylistComposer());
+        _keyboardShortcutManager.RegisterShortcut("OpenSettings", () => _mainWindowViewModel.OpenSettings());
+        _keyboardShortcutManager.RegisterShortcut("RefreshLibrary", () => _mainWindowViewModel.RefreshLibrary());
+        _keyboardShortcutManager.RegisterShortcut("ToggleDisplayMode", () => _mainWindowViewModel.ToggleDisplayMode());
+        _keyboardShortcutManager.RegisterShortcut("CloseDialog", () => _mainWindowViewModel.CloseDialog());
+
+        // Attach global key event handler to main window
+        mainWindow.KeyDown += OnGlobalKeyDown;
+    }
+
+    private void OnGlobalKeyDown(object? sender, KeyEventArgs e)
+    {
+        // Let the keyboard shortcut manager handle the event
+        _keyboardShortcutManager?.HandleKeyEvent(e);
     }
 
     private void DisableAvaloniaDataAnnotationValidation()

@@ -855,6 +855,112 @@ public partial class MainWindowViewModel : ViewModelBase
         Duration = 245;
     }
 
+    // Keyboard shortcut methods
+    public void VolumeUp()
+    {
+        Volume = Math.Min(100, Volume + 5);
+    }
+
+    public void VolumeDown()
+    {
+        Volume = Math.Max(0, Volume - 5);
+    }
+
+    private bool _isMuted;
+    private int _volumeBeforeMute;
+
+    public void ToggleMute()
+    {
+        if (_isMuted)
+        {
+            Volume = _volumeBeforeMute;
+            _isMuted = false;
+            StatusMessage = "Unmuted";
+        }
+        else
+        {
+            _volumeBeforeMute = Volume;
+            Volume = 0;
+            _isMuted = true;
+            StatusMessage = "Muted";
+        }
+    }
+
+    public void ToggleFullscreen()
+    {
+        // This will be handled by the window itself
+        // For now, just toggle video mode as a placeholder
+        ToggleVideoMode();
+    }
+
+    public void AddSelectedToPlaylistEnd()
+    {
+        if (SelectedMediaFile != null)
+        {
+            _ = AddToPlaylistAsync(SelectedMediaFile, "end");
+        }
+    }
+
+    public void AddSelectedToPlaylistNext()
+    {
+        if (SelectedMediaFile != null)
+        {
+            _ = AddToPlaylistAsync(SelectedMediaFile, "next");
+        }
+    }
+
+    public void RemoveSelectedFromPlaylist()
+    {
+        if (SelectedPlaylistItem != null)
+        {
+            _ = RemoveSongAsync(SelectedPlaylistItem);
+        }
+    }
+
+    public void FocusSearch()
+    {
+        // This will be handled by the view
+        // Raise an event or use a message bus to notify the view
+        StatusMessage = "Search focused";
+    }
+
+    public void OpenPlaylistComposer()
+    {
+        // This will open the playlist composer window
+        StatusMessage = "Opening Playlist Composer...";
+        // TODO: Implement window opening logic
+    }
+
+    public void OpenSettings()
+    {
+        // This will open the settings window
+        StatusMessage = "Opening Settings...";
+        // TODO: Implement window opening logic
+    }
+
+    public void RefreshLibrary()
+    {
+        _ = InitializeAsync();
+        StatusMessage = "Refreshing library...";
+    }
+
+    public void ToggleDisplayMode()
+    {
+        // Toggle between single and dual screen mode
+        StatusMessage = "Display mode toggle not yet implemented";
+        // TODO: Implement display mode toggle
+    }
+
+    public void CloseDialog()
+    {
+        // Close any open dialogs or exit fullscreen
+        if (IsVideoMode)
+        {
+            ToggleVideoMode();
+        }
+        StatusMessage = "Dialog closed";
+    }
+
     public void Dispose()
     {
         _handleCollapseTimer?.Dispose();
