@@ -10,13 +10,15 @@ namespace KaraokePlayer.Services;
 public class ErrorHandlingService : IErrorHandlingService
 {
     private readonly INotificationService _notificationService;
+    private readonly ILoggingService? _loggingService;
     private readonly ConcurrentDictionary<string, MediaError> _errors;
 
     public event EventHandler<MediaErrorEventArgs>? ErrorOccurred;
 
-    public ErrorHandlingService(INotificationService notificationService)
+    public ErrorHandlingService(INotificationService notificationService, ILoggingService? loggingService = null)
     {
         _notificationService = notificationService;
+        _loggingService = loggingService;
         _errors = new ConcurrentDictionary<string, MediaError>();
     }
 
@@ -29,6 +31,7 @@ public class ErrorHandlingService : IErrorHandlingService
             Details = details
         };
 
+        _loggingService?.LogFileLoadFailure(mediaFile.FilePath, $"Corrupted: {details}");
         StoreError(mediaFile, error);
         _notificationService.ShowError(
             "Playback Error",
@@ -46,6 +49,7 @@ public class ErrorHandlingService : IErrorHandlingService
             Details = $"The file at {mediaFile.FilePath} no longer exists"
         };
 
+        _loggingService?.LogFileLoadFailure(mediaFile.FilePath, "File not found");
         StoreError(mediaFile, error);
         _notificationService.ShowWarning(
             "File Missing",
@@ -63,6 +67,7 @@ public class ErrorHandlingService : IErrorHandlingService
             Details = $"Insufficient permissions to access {mediaFile.FilePath}"
         };
 
+        _loggingService?.LogFileLoadFailure(mediaFile.FilePath, "Permission denied");
         StoreError(mediaFile, error);
         _notificationService.ShowError(
             "Permission Error",
@@ -80,6 +85,7 @@ public class ErrorHandlingService : IErrorHandlingService
             Details = details
         };
 
+        _loggingService?.LogError($"Playback failure for {mediaFile.FilePath}: {details}");
         StoreError(mediaFile, error);
         _notificationService.ShowError(
             "Playback Error",
@@ -99,6 +105,12 @@ public class ErrorHandlingService : IErrorHandlingService
                 Details = details
             };
 
+            _loggingService?.LogCrossfadeTransition(
+                currentFile.Filename, 
+                nextFile.Filename, 
+                false, 
+                details
+            );
             StoreError(nextFile, error);
         }
 
@@ -118,6 +130,7 @@ public class ErrorHandlingService : IErrorHandlingService
             Details = details
         };
 
+        _loggingService?.LogWarning($"Metadata extraction failed for {mediaFile.FilePath}: {details}");
         StoreError(mediaFile, error);
         // Don't show toast for metadata failures - they're not critical
     }
@@ -131,6 +144,7 @@ public class ErrorHandlingService : IErrorHandlingService
             Details = details
         };
 
+        _loggingService?.LogWarning($"Thumbnail generation failed for {mediaFile.FilePath}: {details}");
         StoreError(mediaFile, error);
         // Don't show toast for thumbnail failures - they're not critical
     }

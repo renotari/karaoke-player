@@ -26,6 +26,7 @@ public partial class App : Application
     private IKeyboardShortcutManager? _keyboardShortcutManager;
     private INotificationService? _notificationService;
     private IErrorHandlingService? _errorHandlingService;
+    private ILoggingService? _loggingService;
     private MainWindowViewModel? _mainWindowViewModel;
 
     public override void Initialize()
@@ -66,6 +67,10 @@ public partial class App : Application
     {
         try
         {
+            // Initialize logging service first so other services can use it
+            _loggingService = new LoggingService();
+            _loggingService.LogInformation("Application starting");
+
             // Initialize LibVLC
             Core.Initialize();
 
@@ -83,22 +88,25 @@ public partial class App : Application
             _dbContext = new KaraokeDbContext(optionsBuilder.Options);
             _dbContext.Database.EnsureCreated();
 
-            // Create service instances
+            // Create service instances with logging
             _notificationService = new NotificationService();
-            _errorHandlingService = new ErrorHandlingService(_notificationService);
+            _errorHandlingService = new ErrorHandlingService(_notificationService, _loggingService);
             _searchEngine = new SearchEngine(_dbContext);
             _playlistManager = new PlaylistManager(_dbContext);
-            _mediaPlayerController = new MediaPlayerController();
+            _mediaPlayerController = new MediaPlayerController(_loggingService);
             _mediaLibraryManager = new MediaLibraryManager(_dbContext);
             _keyboardShortcutManager = new KeyboardShortcutManager();
 
             // Clear all error states on application startup (Requirement 18.13)
             _errorHandlingService.ClearAllErrors();
+            
+            _loggingService.LogInformation("All services initialized successfully");
         }
         catch (Exception ex)
         {
             // Log error - for now just continue with null services
             // The ViewModel will handle null services gracefully
+            _loggingService?.LogCritical("Error initializing services", ex);
             Console.WriteLine($"Error initializing services: {ex.Message}");
         }
     }
@@ -125,6 +133,8 @@ public partial class App : Application
 
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
     {
+        _loggingService?.LogInformation("Application shutting down");
+        
         // Cleanup services
         if (_mediaPlayerController is IDisposable playerDisposable)
         {
@@ -137,6 +147,8 @@ public partial class App : Application
         }
 
         _dbContext?.Dispose();
+        
+        _loggingService?.LogInformation("Application shutdown complete");
     }
 
     private void SetupKeyboardShortcuts(MainWindow mainWindow)

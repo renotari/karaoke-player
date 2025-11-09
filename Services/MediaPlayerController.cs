@@ -15,6 +15,7 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     private readonly LibVLC _libVLC;
     private readonly MediaPlayer _currentPlayer;
     private readonly MediaPlayer _preloadedPlayer;
+    private readonly ILoggingService? _loggingService;
     private PlaybackState _state;
     private MediaFile? _currentMedia;
     private MediaFile? _preloadedMedia;
@@ -80,8 +81,10 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     public event EventHandler<MediaEndedEventArgs>? MediaEnded;
     public event EventHandler<PlaybackErrorEventArgs>? PlaybackError;
 
-    public MediaPlayerController()
+    public MediaPlayerController(ILoggingService? loggingService = null)
     {
+        _loggingService = loggingService;
+        
         // Initialize LibVLC
         Core.Initialize();
         
@@ -101,6 +104,8 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         // Set initial volume
         _currentPlayer.Volume = (int)(_volume * 100);
         _preloadedPlayer.Volume = 0; // Preloaded player starts muted
+        
+        _loggingService?.LogInformation("MediaPlayerController initialized");
     }
 
     public async Task PlayAsync(MediaFile mediaFile)
@@ -344,22 +349,26 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     private void OnPlaying(object? sender, EventArgs e)
     {
         State = PlaybackState.Playing;
+        _loggingService?.LogPlaybackEvent("Playing", $"File: {_currentMedia?.Filename ?? "Unknown"}");
     }
 
     private void OnPaused(object? sender, EventArgs e)
     {
         State = PlaybackState.Paused;
+        _loggingService?.LogPlaybackEvent("Paused", $"File: {_currentMedia?.Filename ?? "Unknown"}");
     }
 
     private void OnStopped(object? sender, EventArgs e)
     {
         State = PlaybackState.Stopped;
+        _loggingService?.LogPlaybackEvent("Stopped", $"File: {_currentMedia?.Filename ?? "Unknown"}");
     }
 
     private void OnEndReached(object? sender, EventArgs e)
     {
         var endedMedia = _currentMedia;
         State = PlaybackState.Stopped;
+        _loggingService?.LogPlaybackEvent("EndReached", $"File: {endedMedia?.Filename ?? "Unknown"}");
         
         MediaEnded?.Invoke(this, new MediaEndedEventArgs
         {
@@ -370,6 +379,7 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     private void OnEncounteredError(object? sender, EventArgs e)
     {
         State = PlaybackState.Error;
+        _loggingService?.LogError($"Playback error for file: {_currentMedia?.Filename ?? "Unknown"}");
         
         PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
         {
@@ -469,12 +479,22 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
             inactivePlayer.Volume = 0;
             inactivePlayer.Play();
 
+            _loggingService?.LogPlaybackEvent("CrossfadeStarted", 
+                $"From: {_currentMedia?.Filename ?? "Unknown"} To: {_preloadedMedia?.Filename ?? "Unknown"} Duration: {_crossfadeDuration}s");
+
             // Create a timer to update volumes during crossfade
             _crossfadeTimer = new System.Threading.Timer(UpdateCrossfadeVolumes, null, 0, 50); // Update every 50ms
         }
         catch (Exception ex)
         {
             // If crossfade fails, cancel it and skip to next song
+            _loggingService?.LogCrossfadeTransition(
+                _currentMedia?.Filename ?? "Unknown",
+                _preloadedMedia?.Filename ?? "Unknown",
+                false,
+                ex.Message
+            );
+            
             CancelCrossfade();
             
             PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
@@ -552,6 +572,12 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
             _crossfadeInProgress = false;
             _preloadedMedia = null;
 
+            _loggingService?.LogCrossfadeTransition(
+                oldMedia?.Filename ?? "Unknown",
+                _currentMedia?.Filename ?? "Unknown",
+                true
+            );
+
             // Notify that the previous media has ended
             MediaEnded?.Invoke(this, new MediaEndedEventArgs
             {
@@ -560,6 +586,8 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         }
         catch (Exception ex)
         {
+            _loggingService?.LogError($"Failed to complete crossfade: {ex.Message}", ex);
+            
             PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
             {
                 ErrorMessage = $"Failed to complete crossfade: {ex.Message}",

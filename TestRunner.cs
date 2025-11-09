@@ -44,6 +44,11 @@ public static class TestRunner
             // Run PlaybackWindow tests
             await TestPlaybackWindow.RunTests();
 
+            Console.WriteLine();
+
+            // Run LoggingService tests
+            LoggingServiceTest.RunTests();
+
             Console.WriteLine("\n=====================================");
             Console.WriteLine("All tests completed successfully!");
             Console.WriteLine("=====================================\n");
