@@ -347,7 +347,12 @@ git status
   - Add Reset to Defaults button and Apply/Cancel buttons
   - _Requirements: 10, 11, 22_
 
-- [ ] 23. Create Settings ViewModel
+- [x] 23. Create Settings ViewModel
+
+
+
+
+
   - Create SettingsViewModel with ReactiveUI
   - Bind all settings properties to Settings Manager
   - Implement validation for settings values

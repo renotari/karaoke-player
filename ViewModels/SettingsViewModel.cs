@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -15,6 +16,7 @@ namespace KaraokePlayer.ViewModels;
 public class SettingsViewModel : ViewModelBase
 {
     private readonly ISettingsManager _settingsManager;
+    private readonly IMediaPlayerController? _mediaPlayerController;
     private readonly Window? _owner;
     private AppSettings _originalSettings;
     private AppSettings _workingSettings;
@@ -41,14 +43,22 @@ public class SettingsViewModel : ViewModelBase
     private int _preloadBufferSize;
     private int _cacheSize;
 
-    public SettingsViewModel() : this(null, null)
+    // Validation errors
+    private string? _mediaDirectoryError;
+    private string? _crossfadeDurationError;
+    private string? _fontSizeError;
+    private string? _preloadBufferSizeError;
+    private string? _cacheSizeError;
+
+    public SettingsViewModel() : this(null, null, null)
     {
         // Design-time constructor
     }
 
-    public SettingsViewModel(ISettingsManager? settingsManager, Window? owner)
+    public SettingsViewModel(ISettingsManager? settingsManager, IMediaPlayerController? mediaPlayerController, Window? owner)
     {
         _settingsManager = settingsManager ?? throw new ArgumentNullException(nameof(settingsManager));
+        _mediaPlayerController = mediaPlayerController;
         _owner = owner;
 
         // Load current settings
@@ -57,14 +67,8 @@ public class SettingsViewModel : ViewModelBase
         LoadFromSettings(_workingSettings);
 
         // Initialize audio devices
-        AudioDevices = new ObservableCollection<string>
-        {
-            "Default Audio Device",
-            "Speakers",
-            "Headphones",
-            "HDMI Audio"
-        };
-        SelectedAudioDevice = AudioDevices.FirstOrDefault() ?? "Default Audio Device";
+        AudioDevices = new ObservableCollection<string>();
+        LoadAudioDevices();
 
         // Initialize keyboard shortcuts
         KeyboardShortcuts = new ObservableCollection<KeyboardShortcutItem>
@@ -91,12 +95,15 @@ public class SettingsViewModel : ViewModelBase
 
         // Commands
         BrowseMediaDirectoryCommand = ReactiveCommand.CreateFromTask(BrowseMediaDirectoryAsync);
-        TestAudioCommand = ReactiveCommand.Create(TestAudio);
+        TestAudioCommand = ReactiveCommand.Create(TestAudio, this.WhenAnyValue(x => x.SelectedAudioDevice).Select(d => !string.IsNullOrEmpty(d)));
         ResetShortcutCommand = ReactiveCommand.Create<KeyboardShortcutItem>(ResetShortcut);
         ResetToDefaultsCommand = ReactiveCommand.CreateFromTask(ResetToDefaultsAsync);
-        OkCommand = ReactiveCommand.CreateFromTask(OkAsync);
+        OkCommand = ReactiveCommand.CreateFromTask(OkAsync, this.WhenAnyValue(x => x.HasValidationErrors).Select(hasErrors => !hasErrors));
         CancelCommand = ReactiveCommand.Create(Cancel);
-        ApplyCommand = ReactiveCommand.CreateFromTask(ApplyAsync);
+        ApplyCommand = ReactiveCommand.CreateFromTask(ApplyAsync, this.WhenAnyValue(x => x.HasValidationErrors).Select(hasErrors => !hasErrors));
+
+        // Set up validation
+        SetupValidation();
     }
 
     #region Properties
@@ -105,7 +112,11 @@ public class SettingsViewModel : ViewModelBase
     public string MediaDirectory
     {
         get => _mediaDirectory;
-        set => this.RaiseAndSetIfChanged(ref _mediaDirectory, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _mediaDirectory, value);
+            ValidateMediaDirectory();
+        }
     }
 
     public int DisplayModeIndex
@@ -130,7 +141,18 @@ public class SettingsViewModel : ViewModelBase
     public double VolumePercent
     {
         get => _volumePercent;
-        set => this.RaiseAndSetIfChanged(ref _volumePercent, value);
+        set
+        {
+            // Clamp value between 0 and 100
+            var clampedValue = Math.Max(0, Math.Min(100, value));
+            this.RaiseAndSetIfChanged(ref _volumePercent, clampedValue);
+            
+            // Real-time preview: update media player volume
+            if (_mediaPlayerController != null)
+            {
+                _mediaPlayerController.SetVolume((float)(clampedValue / 100.0));
+            }
+        }
     }
 
     public bool AudioBoostEnabled
@@ -144,19 +166,54 @@ public class SettingsViewModel : ViewModelBase
     public string SelectedAudioDevice
     {
         get => _selectedAudioDevice;
-        set => this.RaiseAndSetIfChanged(ref _selectedAudioDevice, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedAudioDevice, value);
+            
+            // Real-time preview: update audio device
+            if (_mediaPlayerController != null && !string.IsNullOrEmpty(value))
+            {
+                try
+                {
+                    _mediaPlayerController.SetAudioDevice(value);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error setting audio device: {ex.Message}");
+                }
+            }
+        }
     }
 
     public bool CrossfadeEnabled
     {
         get => _crossfadeEnabled;
-        set => this.RaiseAndSetIfChanged(ref _crossfadeEnabled, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _crossfadeEnabled, value);
+            
+            // Real-time preview: update crossfade setting
+            if (_mediaPlayerController != null)
+            {
+                _mediaPlayerController.EnableCrossfade(value, _crossfadeDuration);
+            }
+        }
     }
 
     public int CrossfadeDuration
     {
         get => _crossfadeDuration;
-        set => this.RaiseAndSetIfChanged(ref _crossfadeDuration, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _crossfadeDuration, value);
+            ValidateCrossfadeDuration();
+            
+            // Real-time preview: update crossfade duration
+            if (_mediaPlayerController != null && _crossfadeEnabled)
+            {
+                _mediaPlayerController.EnableCrossfade(_crossfadeEnabled, value);
+            }
+        }
     }
 
     // Display Tab
@@ -169,7 +226,11 @@ public class SettingsViewModel : ViewModelBase
     public int FontSize
     {
         get => _fontSize;
-        set => this.RaiseAndSetIfChanged(ref _fontSize, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _fontSize, value);
+            ValidateFontSize();
+        }
     }
 
     public int VisualizationStyleIndex
@@ -185,14 +246,60 @@ public class SettingsViewModel : ViewModelBase
     public int PreloadBufferSize
     {
         get => _preloadBufferSize;
-        set => this.RaiseAndSetIfChanged(ref _preloadBufferSize, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _preloadBufferSize, value);
+            ValidatePreloadBufferSize();
+        }
     }
 
     public int CacheSize
     {
         get => _cacheSize;
-        set => this.RaiseAndSetIfChanged(ref _cacheSize, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _cacheSize, value);
+            ValidateCacheSize();
+        }
     }
+
+    // Validation error properties
+    public string? MediaDirectoryError
+    {
+        get => _mediaDirectoryError;
+        private set => this.RaiseAndSetIfChanged(ref _mediaDirectoryError, value);
+    }
+
+    public string? CrossfadeDurationError
+    {
+        get => _crossfadeDurationError;
+        private set => this.RaiseAndSetIfChanged(ref _crossfadeDurationError, value);
+    }
+
+    public string? FontSizeError
+    {
+        get => _fontSizeError;
+        private set => this.RaiseAndSetIfChanged(ref _fontSizeError, value);
+    }
+
+    public string? PreloadBufferSizeError
+    {
+        get => _preloadBufferSizeError;
+        private set => this.RaiseAndSetIfChanged(ref _preloadBufferSizeError, value);
+    }
+
+    public string? CacheSizeError
+    {
+        get => _cacheSizeError;
+        private set => this.RaiseAndSetIfChanged(ref _cacheSizeError, value);
+    }
+
+    public bool HasValidationErrors =>
+        !string.IsNullOrEmpty(MediaDirectoryError) ||
+        !string.IsNullOrEmpty(CrossfadeDurationError) ||
+        !string.IsNullOrEmpty(FontSizeError) ||
+        !string.IsNullOrEmpty(PreloadBufferSizeError) ||
+        !string.IsNullOrEmpty(CacheSizeError);
 
     #endregion
 
@@ -274,6 +381,19 @@ public class SettingsViewModel : ViewModelBase
     {
         try
         {
+            // Validate all settings before applying
+            ValidateMediaDirectory();
+            ValidateCrossfadeDuration();
+            ValidateFontSize();
+            ValidatePreloadBufferSize();
+            ValidateCacheSize();
+
+            if (HasValidationErrors)
+            {
+                Console.WriteLine("Cannot apply settings: validation errors exist");
+                return;
+            }
+
             // Save current UI values to working settings
             SaveToSettings(_workingSettings);
 
@@ -282,6 +402,8 @@ public class SettingsViewModel : ViewModelBase
 
             // Update original settings to match
             _originalSettings = CloneSettings(_workingSettings);
+            
+            Console.WriteLine("Settings applied successfully");
         }
         catch (Exception ex)
         {
@@ -293,6 +415,119 @@ public class SettingsViewModel : ViewModelBase
     #endregion
 
     #region Helper Methods
+
+    private void SetupValidation()
+    {
+        // Validate on property changes
+        this.WhenAnyValue(
+            x => x.MediaDirectoryError,
+            x => x.CrossfadeDurationError,
+            x => x.FontSizeError,
+            x => x.PreloadBufferSizeError,
+            x => x.CacheSizeError)
+            .Subscribe(_ => this.RaisePropertyChanged(nameof(HasValidationErrors)));
+    }
+
+    private void LoadAudioDevices()
+    {
+        try
+        {
+            if (_mediaPlayerController != null)
+            {
+                var devices = _mediaPlayerController.GetAudioDevices();
+                AudioDevices.Clear();
+                
+                foreach (var device in devices)
+                {
+                    AudioDevices.Add(device.Name);
+                }
+
+                // Set selected device from settings
+                var currentDevice = _workingSettings.AudioOutputDevice;
+                if (!string.IsNullOrEmpty(currentDevice) && AudioDevices.Contains(currentDevice))
+                {
+                    SelectedAudioDevice = currentDevice;
+                }
+                else if (AudioDevices.Count > 0)
+                {
+                    SelectedAudioDevice = AudioDevices[0];
+                }
+            }
+            else
+            {
+                // Fallback if media player controller is not available
+                AudioDevices.Add("Default Audio Device");
+                SelectedAudioDevice = "Default Audio Device";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading audio devices: {ex.Message}");
+            // Fallback
+            AudioDevices.Add("Default Audio Device");
+            SelectedAudioDevice = "Default Audio Device";
+        }
+    }
+
+    private void ValidateMediaDirectory()
+    {
+        if (string.IsNullOrWhiteSpace(MediaDirectory))
+        {
+            MediaDirectoryError = "Media directory cannot be empty";
+        }
+        else
+        {
+            MediaDirectoryError = null;
+        }
+    }
+
+    private void ValidateCrossfadeDuration()
+    {
+        if (!_settingsManager.ValidateSetting(nameof(AppSettings.CrossfadeDuration), CrossfadeDuration, out var error))
+        {
+            CrossfadeDurationError = error;
+        }
+        else
+        {
+            CrossfadeDurationError = null;
+        }
+    }
+
+    private void ValidateFontSize()
+    {
+        if (!_settingsManager.ValidateSetting(nameof(AppSettings.FontSize), FontSize, out var error))
+        {
+            FontSizeError = error;
+        }
+        else
+        {
+            FontSizeError = null;
+        }
+    }
+
+    private void ValidatePreloadBufferSize()
+    {
+        if (!_settingsManager.ValidateSetting(nameof(AppSettings.PreloadBufferSize), PreloadBufferSize, out var error))
+        {
+            PreloadBufferSizeError = error;
+        }
+        else
+        {
+            PreloadBufferSizeError = null;
+        }
+    }
+
+    private void ValidateCacheSize()
+    {
+        if (!_settingsManager.ValidateSetting(nameof(AppSettings.CacheSize), CacheSize, out var error))
+        {
+            CacheSizeError = error;
+        }
+        else
+        {
+            CacheSizeError = null;
+        }
+    }
 
     private void LoadFromSettings(AppSettings settings)
     {
@@ -307,6 +542,12 @@ public class SettingsViewModel : ViewModelBase
         AudioBoostEnabled = settings.AudioBoostEnabled;
         CrossfadeEnabled = settings.CrossfadeEnabled;
         CrossfadeDuration = settings.CrossfadeDuration;
+        
+        // Set audio device
+        if (!string.IsNullOrEmpty(settings.AudioOutputDevice) && AudioDevices.Contains(settings.AudioOutputDevice))
+        {
+            SelectedAudioDevice = settings.AudioOutputDevice;
+        }
 
         // Display
         ThemeIndex = settings.Theme.Equals("dark", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
