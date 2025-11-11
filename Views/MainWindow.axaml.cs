@@ -1,12 +1,18 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using KaraokePlayer.ViewModels;
+using KaraokePlayer.Services;
+using System;
+using System.Threading.Tasks;
+using ReactiveUI;
 
 namespace KaraokePlayer.Views;
 
 public partial class MainWindow : Window
 {
     private TextBox? _searchTextBox;
+    private IDisposable? _playlistComposerSubscription;
+    private IDisposable? _settingsSubscription;
 
     public MainWindow()
     {
@@ -14,6 +20,38 @@ public partial class MainWindow : Window
         
         // Wire up pointer events for control handle after initialization
         Opened += OnWindowOpened;
+        Closed += OnWindowClosed;
+        
+        // Subscribe to window opening messages
+        _playlistComposerSubscription = MessageBus.Current.Listen<OpenPlaylistComposerMessage>()
+            .Subscribe(async _ => await OpenPlaylistComposerAsync());
+            
+        _settingsSubscription = MessageBus.Current.Listen<OpenSettingsMessage>()
+            .Subscribe(async _ => await OpenSettingsAsync());
+    }
+
+    /// <summary>
+    /// Opens the Playlist Composer window
+    /// </summary>
+    public async Task OpenPlaylistComposerAsync()
+    {
+        var playlistComposer = new PlaylistComposerWindow
+        {
+            DataContext = new PlaylistComposerViewModel()
+        };
+        await playlistComposer.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Opens the Settings window
+    /// </summary>
+    public async Task OpenSettingsAsync()
+    {
+        var settingsWindow = new SettingsWindow
+        {
+            DataContext = new SettingsViewModel()
+        };
+        await settingsWindow.ShowDialog(this);
     }
 
     private void OnWindowOpened(object? sender, System.EventArgs e)
@@ -59,5 +97,12 @@ public partial class MainWindow : Window
         {
             viewModel.ExpandControlHandleCommand.Execute(System.Reactive.Unit.Default);
         }
+    }
+
+    private void OnWindowClosed(object? sender, EventArgs e)
+    {
+        // Cleanup subscriptions
+        _playlistComposerSubscription?.Dispose();
+        _settingsSubscription?.Dispose();
     }
 }

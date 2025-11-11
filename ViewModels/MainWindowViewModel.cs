@@ -933,18 +933,22 @@ public partial class MainWindowViewModel : ViewModelBase
         StatusMessage = "Search focused";
     }
 
-    public void OpenPlaylistComposer()
+    public async void OpenPlaylistComposer()
     {
         // This will open the playlist composer window
         StatusMessage = "Opening Playlist Composer...";
-        // TODO: Implement window opening logic
+        
+        // Use ReactiveUI MessageBus to request window opening
+        ReactiveUI.MessageBus.Current.SendMessage(new OpenPlaylistComposerMessage());
     }
 
-    public void OpenSettings()
+    public async void OpenSettings()
     {
         // This will open the settings window
         StatusMessage = "Opening Settings...";
-        // TODO: Implement window opening logic
+        
+        // Use ReactiveUI MessageBus to request window opening
+        ReactiveUI.MessageBus.Current.SendMessage(new OpenSettingsMessage());
     }
 
     public void RefreshLibrary()

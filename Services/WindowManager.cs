@@ -226,6 +226,13 @@ namespace KaraokePlayer.Services
     }
 
     /// <summary>
+    /// Message to open the Settings window
+    /// </summary>
+    public class OpenSettingsMessage
+    {
+    }
+
+    /// <summary>
     /// Message to toggle fullscreen for a window
     /// </summary>
     public class ToggleFullscreenMessage

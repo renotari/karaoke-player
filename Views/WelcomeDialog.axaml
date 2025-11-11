@@ -1,0 +1,150 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="500"
+        x:Class="KaraokePlayer.Views.WelcomeDialog"
+        Title="Welcome to Karaoke Player"
+        Width="600" Height="500"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False"
+        Icon="/Assets/avalonia-logo.ico">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.title">
+      <Setter Property="FontSize" Value="24"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Margin" Value="0,0,0,20"/>
+    </Style>
+    <Style Selector="TextBlock.subtitle">
+      <Setter Property="FontSize" Value="16"/>
+      <Setter Property="Margin" Value="0,0,0,10"/>
+    </Style>
+    <Style Selector="TextBlock.tip">
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Margin" Value="0,5,0,5"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#0078D4"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Padding" Value="20,10"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+  </Window.Styles>
+
+  <Grid Margin="30">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <!-- Header -->
+    <StackPanel Grid.Row="0">
+      <TextBlock Classes="title" Text="Welcome to Karaoke Player!"/>
+      <TextBlock Classes="subtitle" Text="Let's get started by setting up your media library."/>
+    </StackPanel>
+
+    <!-- Content -->
+    <ScrollViewer Grid.Row="1" Margin="0,20,0,20">
+      <StackPanel>
+        <!-- Media Directory Selection -->
+        <TextBlock Text="Media Directory" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,10"/>
+        <TextBlock Text="Select the folder where your karaoke and music files are stored." 
+                   TextWrapping="Wrap" 
+                   Margin="0,0,0,10"
+                   Foreground="#888"/>
+        
+        <Grid Margin="0,0,0,20">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          
+          <TextBox Grid.Column="0" 
+                   Name="MediaDirectoryTextBox"
+                   Watermark="Select a directory..."
+                   IsReadOnly="True"
+                   Margin="0,0,10,0"/>
+          <Button Grid.Column="1" 
+                  Name="BrowseButton"
+                  Content="Browse..."
+                  Click="OnBrowseClick"/>
+        </Grid>
+
+        <!-- Tips Section -->
+        <Border BorderBrush="#333" 
+                BorderThickness="1" 
+                CornerRadius="5" 
+                Padding="15"
+                Background="#1A1A1A">
+          <StackPanel>
+            <TextBlock Text="Quick Tips" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,10"/>
+            
+            <StackPanel Orientation="Horizontal" Margin="0,5">
+              <TextBlock Text="•" Margin="0,0,10,0"/>
+              <TextBlock Classes="tip" Text="Supported formats: MP4, MKV, WEBM (video) and MP3 (audio)"/>
+            </StackPanel>
+            
+            <StackPanel Orientation="Horizontal" Margin="0,5">
+              <TextBlock Text="•" Margin="0,0,10,0"/>
+              <TextBlock Classes="tip" Text="Press Space to play/pause, Arrow keys to skip or adjust volume"/>
+            </StackPanel>
+            
+            <StackPanel Orientation="Horizontal" Margin="0,5">
+              <TextBlock Text="•" Margin="0,0,10,0"/>
+              <TextBlock Classes="tip" Text="Use F11 for fullscreen mode during playback"/>
+            </StackPanel>
+            
+            <StackPanel Orientation="Horizontal" Margin="0,5">
+              <TextBlock Text="•" Margin="0,0,10,0"/>
+              <TextBlock Classes="tip" Text="Double-click songs to add them to your playlist"/>
+            </StackPanel>
+            
+            <StackPanel Orientation="Horizontal" Margin="0,5">
+              <TextBlock Text="•" Margin="0,0,10,0"/>
+              <TextBlock Classes="tip" Text="The app will scan your directory and process metadata in the background"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- Progress Section (Hidden initially) -->
+        <StackPanel Name="ProgressPanel" IsVisible="False" Margin="0,20,0,0">
+          <TextBlock Name="ProgressText" 
+                     Text="Scanning media directory..." 
+                     FontWeight="SemiBold" 
+                     Margin="0,0,0,10"/>
+          <ProgressBar Name="ScanProgressBar" 
+                       Height="8" 
+                       Minimum="0" 
+                       Maximum="100" 
+                       Value="0"/>
+          <TextBlock Name="ProgressDetails" 
+                     Text="" 
+                     FontSize="12" 
+                     Foreground="#888" 
+                     Margin="0,5,0,0"/>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Footer Buttons -->
+    <StackPanel Grid.Row="2" 
+                Orientation="Horizontal" 
+                HorizontalAlignment="Right"
+                Spacing="10">
+      <Button Name="CancelButton" 
+              Content="Cancel" 
+              Width="100"
+              Click="OnCancelClick"/>
+      <Button Name="ContinueButton" 
+              Classes="primary"
+              Content="Continue" 
+              Width="100"
+              IsEnabled="False"
+              Click="OnContinueClick"/>
+    </StackPanel>
+  </Grid>
+</Window>

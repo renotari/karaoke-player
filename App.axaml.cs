@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
@@ -6,6 +7,7 @@ using Avalonia.Input;
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Markup.Xaml;
 using KaraokePlayer.Models;
 using KaraokePlayer.Services;
@@ -23,6 +25,9 @@ public partial class App : Application
     private IPlaylistManager? _playlistManager;
     private IMediaPlayerController? _mediaPlayerController;
     private IMediaLibraryManager? _mediaLibraryManager;
+    private IMetadataExtractor? _metadataExtractor;
+    private IThumbnailGenerator? _thumbnailGenerator;
+    private ISettingsManager? _settingsManager;
     private IKeyboardShortcutManager? _keyboardShortcutManager;
     private INotificationService? _notificationService;
     private IErrorHandlingService? _errorHandlingService;
@@ -58,6 +63,22 @@ public partial class App : Application
 
             // Cleanup on exit
             desktop.ShutdownRequested += OnShutdownRequested;
+
+            // Check for first run and show welcome dialog after window is ready
+            mainWindow.Opened += async (s, e) =>
+            {
+                var isFirstRun = await CheckFirstRunAsync();
+                
+                if (isFirstRun)
+                {
+                    await ShowWelcomeDialogAsync(mainWindow);
+                }
+                else
+                {
+                    // Load existing settings and scan media directory
+                    await LoadSettingsAndScanAsync();
+                }
+            };
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -91,10 +112,16 @@ public partial class App : Application
             // Create service instances with logging
             _notificationService = new NotificationService();
             _errorHandlingService = new ErrorHandlingService(_notificationService, _loggingService);
+            _settingsManager = new SettingsManager();
             _searchEngine = new SearchEngine(_dbContext);
             _playlistManager = new PlaylistManager(_dbContext);
             _mediaPlayerController = new MediaPlayerController(_loggingService);
             _mediaLibraryManager = new MediaLibraryManager(_dbContext);
+            _metadataExtractor = new MetadataExtractor(_dbContext);
+            
+            // Create LibVLC instance for thumbnail generator
+            var libVLC = new LibVLC();
+            _thumbnailGenerator = new ThumbnailGenerator(_dbContext, libVLC);
             _keyboardShortcutManager = new KeyboardShortcutManager();
 
             // Clear all error states on application startup (Requirement 18.13)
@@ -131,9 +158,136 @@ public partial class App : Application
         return new MainWindowViewModel();
     }
 
+    private async Task<bool> CheckFirstRunAsync()
+    {
+        try
+        {
+            if (_settingsManager == null)
+                return false;
+
+            // Check if settings file exists
+            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var settingsPath = Path.Combine(appDataPath, "KaraokePlayer", "settings.json");
+            
+            return !File.Exists(settingsPath);
+        }
+        catch (Exception ex)
+        {
+            _loggingService?.LogError("Error checking first run status", ex);
+            return false;
+        }
+    }
+
+    private async Task ShowWelcomeDialogAsync(Window owner)
+    {
+        try
+        {
+            _loggingService?.LogInformation("First run detected - showing welcome dialog");
+
+            if (_mediaLibraryManager == null || _metadataExtractor == null || 
+                _thumbnailGenerator == null || _settingsManager == null)
+            {
+                _loggingService?.LogWarning("Services not initialized, skipping welcome dialog");
+                return;
+            }
+
+            var welcomeDialog = new WelcomeDialog(
+                _mediaLibraryManager,
+                _metadataExtractor,
+                _thumbnailGenerator
+            );
+
+            // Show dialog modally with main window as owner
+            await welcomeDialog.ShowDialog(owner);
+
+            if (welcomeDialog.ScanCompleted && !string.IsNullOrEmpty(welcomeDialog.SelectedMediaDirectory))
+            {
+                // Save the selected directory to settings
+                _settingsManager.SetSetting(nameof(AppSettings.MediaDirectory), welcomeDialog.SelectedMediaDirectory);
+                await _settingsManager.SaveSettingsAsync();
+                
+                _loggingService?.LogInformation($"First run complete - media directory set to: {welcomeDialog.SelectedMediaDirectory}");
+            }
+            else
+            {
+                // User cancelled - create default settings file so app can still run
+                // but they can change the directory later in settings
+                _loggingService?.LogInformation("Welcome dialog cancelled - creating default settings");
+                await _settingsManager.LoadSettingsAsync(); // This will create default settings
+            }
+        }
+        catch (Exception ex)
+        {
+            _loggingService?.LogError("Error showing welcome dialog", ex);
+        }
+    }
+
+    private async Task LoadSettingsAndScanAsync()
+    {
+        try
+        {
+            if (_settingsManager == null || _mediaLibraryManager == null)
+                return;
+
+            // Load settings
+            await _settingsManager.LoadSettingsAsync();
+            var settings = _settingsManager.GetSettings();
+
+            _loggingService?.LogInformation($"Settings loaded - media directory: {settings.MediaDirectory}");
+
+            // Scan media directory if it exists
+            if (!string.IsNullOrEmpty(settings.MediaDirectory) && Directory.Exists(settings.MediaDirectory))
+            {
+                _loggingService?.LogInformation("Scanning media directory...");
+                
+                // Perform scan in background
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _mediaLibraryManager.ScanDirectoryAsync(settings.MediaDirectory);
+                        _mediaLibraryManager.StartMonitoring();
+
+                        // Start background processing
+                        var files = await _mediaLibraryManager.GetMediaFilesAsync();
+                        foreach (var file in files)
+                        {
+                            if (!file.MetadataLoaded)
+                                _metadataExtractor?.QueueForExtraction(file);
+                            
+                            if (!file.ThumbnailLoaded)
+                                _thumbnailGenerator?.QueueForGeneration(file);
+                        }
+
+                        _metadataExtractor?.StartProcessing();
+                        _thumbnailGenerator?.StartProcessing();
+
+                        _loggingService?.LogInformation("Media directory scan complete");
+                    }
+                    catch (Exception ex)
+                    {
+                        _loggingService?.LogError("Error scanning media directory", ex);
+                    }
+                });
+            }
+            else
+            {
+                _loggingService?.LogWarning($"Media directory not found or not set: {settings.MediaDirectory}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _loggingService?.LogError("Error loading settings and scanning", ex);
+        }
+    }
+
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
     {
         _loggingService?.LogInformation("Application shutting down");
+        
+        // Stop background processing
+        _metadataExtractor?.StopProcessing();
+        _thumbnailGenerator?.StopProcessing();
         
         // Cleanup services
         if (_mediaPlayerController is IDisposable playerDisposable)
@@ -144,6 +298,16 @@ public partial class App : Application
         if (_mediaLibraryManager is IDisposable libraryDisposable)
         {
             libraryDisposable.Dispose();
+        }
+
+        if (_metadataExtractor is IDisposable extractorDisposable)
+        {
+            extractorDisposable.Dispose();
+        }
+
+        if (_thumbnailGenerator is IDisposable generatorDisposable)
+        {
+            generatorDisposable.Dispose();
         }
 
         _dbContext?.Dispose();

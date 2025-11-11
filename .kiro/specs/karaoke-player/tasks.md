@@ -406,7 +406,12 @@ git status
   - Log playback events, crossfade transitions, and errors
   - _Requirements: 20_
 
-- [ ] 27. Implement first-run experience and initialization
+- [x] 27. Implement first-run experience and initialization
+
+
+
+
+
   - Detect first run (no settings file exists)
   - Show welcome dialog with media directory selection
   - Default to Windows user media directory if not specified
