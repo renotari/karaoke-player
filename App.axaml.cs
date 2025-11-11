@@ -95,7 +95,7 @@ public partial class App : Application
             // Initialize LibVLC
             Core.Initialize();
 
-            // Set up database
+            // Set up database with performance optimizations
             var userDataPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "KaraokePlayer"
@@ -103,11 +103,45 @@ public partial class App : Application
             Directory.CreateDirectory(userDataPath);
 
             var dbPath = Path.Combine(userDataPath, "karaoke.db");
+            
+            // Configure SQLite with performance optimizations
+            var connectionString = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            {
+                DataSource = dbPath,
+                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate,
+                Cache = Microsoft.Data.Sqlite.SqliteCacheMode.Shared, // Enable shared cache for connection pooling
+                Pooling = true // Enable connection pooling
+            }.ToString();
+            
             var optionsBuilder = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<KaraokeDbContext>();
-            optionsBuilder.UseSqlite($"Data Source={dbPath}");
+            optionsBuilder.UseSqlite(connectionString, options =>
+            {
+                options.CommandTimeout(30);
+            });
 
             _dbContext = new KaraokeDbContext(optionsBuilder.Options);
             _dbContext.Database.EnsureCreated();
+            
+            // Enable Write-Ahead Logging (WAL) mode for better concurrency
+            using (var connection = _dbContext.Database.GetDbConnection())
+            {
+                connection.Open();
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "PRAGMA journal_mode=WAL;";
+                    command.ExecuteNonQuery();
+                    
+                    // Set other performance pragmas
+                    command.CommandText = "PRAGMA synchronous=NORMAL;";
+                    command.ExecuteNonQuery();
+                    
+                    command.CommandText = "PRAGMA cache_size=-64000;"; // 64MB cache
+                    command.ExecuteNonQuery();
+                    
+                    command.CommandText = "PRAGMA temp_store=MEMORY;";
+                    command.ExecuteNonQuery();
+                }
+            }
 
             // Create service instances with logging
             _notificationService = new NotificationService();

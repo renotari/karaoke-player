@@ -333,6 +333,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         try
         {
+            var startTime = DateTime.UtcNow;
             FilteredMediaFiles.Clear();
 
             if (string.IsNullOrWhiteSpace(query))
@@ -374,6 +375,13 @@ public partial class MainWindowViewModel : ViewModelBase
                 {
                     FilteredMediaFiles.Add(file);
                 }
+            }
+
+            // Log search performance
+            var duration = DateTime.UtcNow - startTime;
+            if (duration.TotalMilliseconds > 300)
+            {
+                StatusMessage = $"Search completed in {duration.TotalMilliseconds:F0}ms (slow)";
             }
         }
         catch (Exception ex)

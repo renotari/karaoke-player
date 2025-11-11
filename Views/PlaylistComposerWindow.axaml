@@ -105,7 +105,7 @@
                                   HorizontalAlignment="Stretch"/>
                     </Grid>
                     
-                    <!-- Catalog List with Multi-Select Support -->
+                    <!-- Catalog List with Multi-Select Support (virtualization enabled by default) -->
                     <ListBox x:Name="CatalogListBox"
                              Grid.Row="3"
                              ItemsSource="{Binding FilteredCatalogFiles}"
@@ -215,7 +215,7 @@
                         </Grid>
                     </Border>
                     
-                    <!-- Composition List with Reorder Support -->
+                    <!-- Composition List with Reorder Support (virtualization enabled by default) -->
                     <ListBox x:Name="CompositionListBox"
                              Grid.Row="2"
                              ItemsSource="{Binding ComposedPlaylist}"

@@ -21,7 +21,19 @@ public class KaraokeDbContextFactory : IDesignTimeDbContextFactory<KaraokeDbCont
             "karaoke.db"
         );
         
-        optionsBuilder.UseSqlite($"Data Source={dbPath}");
+        // Configure SQLite with performance optimizations
+        var connectionString = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath,
+            Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate,
+            Cache = Microsoft.Data.Sqlite.SqliteCacheMode.Shared, // Enable shared cache for connection pooling
+            Pooling = true // Enable connection pooling
+        }.ToString();
+        
+        optionsBuilder.UseSqlite(connectionString, options =>
+        {
+            options.CommandTimeout(30);
+        });
 
         return new KaraokeDbContext(optionsBuilder.Options);
     }

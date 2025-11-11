@@ -116,7 +116,7 @@
                                Margin="0,0,0,8"
                                IsTabStop="False"/>
 
-                    <!-- Media Catalog List with Virtualization -->
+                    <!-- Media Catalog List with Virtualization (enabled by default in Avalonia) -->
                     <ListBox Grid.Row="2"
                              ItemsSource="{Binding FilteredMediaFiles}"
                              SelectedItem="{Binding SelectedMediaFile}"
@@ -237,7 +237,7 @@
                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
                     </StackPanel>
 
-                    <!-- Playlist Items with Drag-Drop Support -->
+                    <!-- Playlist Items with Drag-Drop Support (virtualization enabled by default) -->
                     <ListBox Grid.Row="1"
                              ItemsSource="{Binding CurrentPlaylist}"
                              SelectedItem="{Binding SelectedPlaylistItem}"

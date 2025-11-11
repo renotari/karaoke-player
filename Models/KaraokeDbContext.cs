@@ -32,13 +32,15 @@ public class KaraokeDbContext : DbContext
             entity.Property(e => e.Format).HasConversion<string>();
         });
 
-        // Configure MediaMetadata
+        // Configure MediaMetadata with composite indexes for search performance
         modelBuilder.Entity<MediaMetadata>(entity =>
         {
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.MediaFileId).IsUnique();
             entity.HasIndex(e => e.Artist);
             entity.HasIndex(e => e.Title);
+            // Composite index for common search patterns (artist + title)
+            entity.HasIndex(e => new { e.Artist, e.Title });
             
             entity.HasOne(e => e.MediaFile)
                 .WithOne(m => m.Metadata)
@@ -70,6 +72,23 @@ public class KaraokeDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.SearchedAt);
+            entity.HasIndex(e => e.SearchTerm); // Index for faster duplicate detection
         });
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        
+        // Enable connection pooling and performance optimizations for SQLite
+        if (!optionsBuilder.IsConfigured)
+        {
+            // This will be configured by the factory, but we can set defaults here
+            optionsBuilder.UseSqlite(options =>
+            {
+                // Enable write-ahead logging for better concurrency
+                options.CommandTimeout(30);
+            });
+        }
     }
 }

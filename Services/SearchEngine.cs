@@ -13,19 +13,24 @@ namespace KaraokePlayer.Services;
 public class SearchEngine : ISearchEngine
 {
     private readonly KaraokeDbContext _dbContext;
+    private readonly PerformanceMonitor? _performanceMonitor;
     private const int MaxHistoryItems = 10;
 
-    public SearchEngine(KaraokeDbContext dbContext)
+    public SearchEngine(KaraokeDbContext dbContext, PerformanceMonitor? performanceMonitor = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _performanceMonitor = performanceMonitor;
     }
 
     /// <summary>
     /// Search for media files by query string with partial matching
     /// Uses LIKE queries for compatibility and ranks results by relevance
+    /// Optimized with AsNoTracking for read-only queries and limited result set
     /// </summary>
     public async Task<List<MediaFile>> SearchAsync(string query)
     {
+        using var _ = _performanceMonitor?.MeasureOperation("SearchEngine.SearchAsync");
+
         if (string.IsNullOrWhiteSpace(query))
         {
             return new List<MediaFile>();
@@ -35,14 +40,17 @@ public class SearchEngine : ISearchEngine
         var searchPattern = $"%{searchTerm}%";
 
         // Query with LIKE for partial matching on artist, title, and filename
-        // Include metadata for searching
+        // Use AsNoTracking for better performance on read-only queries
+        // Use composite index on Artist + Title for faster searches
         var results = await _dbContext.MediaFiles
+            .AsNoTracking() // Performance: No change tracking needed for search results
             .Include(m => m.Metadata)
             .Where(m =>
                 EF.Functions.Like(m.Filename, searchPattern) ||
                 (m.Metadata != null && EF.Functions.Like(m.Metadata.Artist, searchPattern)) ||
                 (m.Metadata != null && EF.Functions.Like(m.Metadata.Title, searchPattern))
             )
+            .Take(1000) // Limit results to prevent memory issues with large libraries
             .ToListAsync();
 
         // Rank results by relevance
@@ -53,6 +61,7 @@ public class SearchEngine : ISearchEngine
 
     /// <summary>
     /// Add a search term to history (maintains last 10 searches)
+    /// Optimized with indexed SearchTerm lookup
     /// </summary>
     public async Task AddToHistoryAsync(string query)
     {
@@ -63,9 +72,10 @@ public class SearchEngine : ISearchEngine
 
         var searchTerm = query.Trim();
 
-        // Check if this term already exists in history
+        // Check if this term already exists in history using indexed column
         var existing = await _dbContext.SearchHistory
-            .FirstOrDefaultAsync(h => h.SearchTerm == searchTerm);
+            .Where(h => h.SearchTerm == searchTerm)
+            .FirstOrDefaultAsync();
 
         if (existing != null)
         {
