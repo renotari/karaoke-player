@@ -434,7 +434,12 @@ git status
   - Profile and optimize for 30K file library support
   - _Requirements: 21_
 
-- [ ] 29. Wire up all components and test integration
+- [x] 29. Wire up all components and test integration
+
+
+
+
+
   - Connect all services via dependency injection in App.axaml.cs
   - Wire up ViewModels to Services
   - Test single screen mode (normal and video mode)

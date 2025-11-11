@@ -32,6 +32,9 @@ public partial class App : Application
     private INotificationService? _notificationService;
     private IErrorHandlingService? _errorHandlingService;
     private ILoggingService? _loggingService;
+    private IWindowManager? _windowManager;
+    private IAudioVisualizationEngine? _audioVisualizationEngine;
+    private ICacheManager? _cacheManager;
     private MainWindowViewModel? _mainWindowViewModel;
 
     public override void Initialize()
@@ -157,6 +160,16 @@ public partial class App : Application
             var libVLC = new LibVLC();
             _thumbnailGenerator = new ThumbnailGenerator(_dbContext, libVLC);
             _keyboardShortcutManager = new KeyboardShortcutManager();
+            
+            // Initialize cache manager with cache directory
+            var cacheDirectory = Path.Combine(userDataPath, "cache");
+            _cacheManager = new CacheManager(cacheDirectory);
+            
+            // Initialize window manager
+            _windowManager = new WindowManager(_settingsManager);
+            
+            // Initialize audio visualization engine
+            _audioVisualizationEngine = new AudioVisualizationEngine();
 
             // Clear all error states on application startup (Requirement 18.13)
             _errorHandlingService.ClearAllErrors();
