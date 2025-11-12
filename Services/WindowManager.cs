@@ -31,8 +31,17 @@ namespace KaraokePlayer.Services
             _fullscreenStates = new Dictionary<string, bool>();
             
             // Load initial mode from settings
-            var displayMode = _settingsManager.GetSetting<string>("DisplayMode") ?? "Single";
-            _currentMode = Enum.TryParse<WindowMode>(displayMode, true, out var mode) ? mode : WindowMode.Single;
+            try
+            {
+                // Try to get as DisplayMode enum first (from AppSettings)
+                var settings = _settingsManager.GetSettings();
+                _currentMode = settings.DisplayMode == Models.DisplayMode.Single ? WindowMode.Single : WindowMode.Dual;
+            }
+            catch
+            {
+                // Fallback to Single mode if there's any error
+                _currentMode = WindowMode.Single;
+            }
         }
 
         /// <summary>

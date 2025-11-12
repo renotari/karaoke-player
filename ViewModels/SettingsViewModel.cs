@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
@@ -53,41 +54,139 @@ public class SettingsViewModel : ViewModelBase, IDisposable
     private string? _preloadBufferSizeError;
     private string? _cacheSizeError;
 
-    public SettingsViewModel() : this(null, null, null)
+    public SettingsViewModel()
     {
-        // Design-time constructor
+        try
+        {
+            // Design-time constructor - create a mock settings manager
+            _settingsManager = new SettingsManager();
+            _mediaPlayerController = null;
+            _owner = null;
+            
+            // Initialize with default settings
+            _originalSettings = new AppSettings();
+            _workingSettings = new AppSettings(); // Don't call CloneSettings in design-time
+            
+            // Collections are already initialized inline
+            // Add a default audio device for design-time
+            AudioDevices.Add("Default Audio Device");
+            _selectedAudioDevice = "Default Audio Device";
+            
+            // Initialize default values for properties to avoid null reference exceptions
+            _mediaDirectory = string.Empty;
+            _volumePercent = 100;
+            _crossfadeDuration = 3;
+            _fontSize = 14;
+            _preloadBufferSize = 30;
+            _cacheSize = 500;
+        }
+        catch
+        {
+            // Silently fail in design-time - this prevents XAML designer crashes
+            // The runtime constructor will be used when actually running the app
+        }
     }
 
     public SettingsViewModel(ISettingsManager? settingsManager, IMediaPlayerController? mediaPlayerController, Window? owner)
     {
-        _settingsManager = settingsManager ?? throw new ArgumentNullException(nameof(settingsManager));
-        _mediaPlayerController = mediaPlayerController;
-        _owner = owner;
-
-        // Load current settings
-        _originalSettings = _settingsManager.GetSettings();
-        _workingSettings = CloneSettings(_originalSettings);
+        var logPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "KaraokePlayer", "Logs", "settings-debug.log");
         
-        // Initialize collections
-        AudioDevices = new ObservableCollection<string>();
-        KeyboardShortcuts = new ObservableCollection<KeyboardShortcutItem>();
+        try
+        {
+            File.AppendAllText(logPath, "SettingsViewModel: Constructor called\n");
+            Console.WriteLine("SettingsViewModel: Starting initialization...");
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Checking parameters...\n");
+            _settingsManager = settingsManager ?? throw new ArgumentNullException(nameof(settingsManager));
+            _mediaPlayerController = mediaPlayerController;
+            _owner = owner;
 
-        // Commands
-        BrowseMediaDirectoryCommand = ReactiveCommand.CreateFromTask(BrowseMediaDirectoryAsync);
-        TestAudioCommand = ReactiveCommand.Create(TestAudio, this.WhenAnyValue(x => x.SelectedAudioDevice).Select(d => !string.IsNullOrEmpty(d)));
-        ResetShortcutCommand = ReactiveCommand.Create<KeyboardShortcutItem>(ResetShortcut);
-        ResetToDefaultsCommand = ReactiveCommand.CreateFromTask(ResetToDefaultsAsync);
-        OkCommand = ReactiveCommand.CreateFromTask(OkAsync, this.WhenAnyValue(x => x.HasValidationErrors).Select(hasErrors => !hasErrors));
-        CancelCommand = ReactiveCommand.Create(Cancel);
-        ApplyCommand = ReactiveCommand.CreateFromTask(ApplyAsync, this.WhenAnyValue(x => x.HasValidationErrors).Select(hasErrors => !hasErrors));
+            File.AppendAllText(logPath, "SettingsViewModel: Loading settings...\n");
+            Console.WriteLine("SettingsViewModel: Loading settings...");
+            // Load current settings
+            _originalSettings = _settingsManager.GetSettings();
+            
+            // Ensure settings has non-null values
+            if (_originalSettings == null)
+            {
+                File.AppendAllText(logPath, "ERROR: GetSettings returned null!\n");
+                throw new InvalidOperationException("Settings manager returned null settings");
+            }
+            
+            File.AppendAllText(logPath, $"SettingsViewModel: Settings loaded - MediaDirectory={_originalSettings.MediaDirectory ?? "NULL"}\n");
+            _workingSettings = CloneSettings(_originalSettings);
+            File.AppendAllText(logPath, "SettingsViewModel: Settings cloned successfully\n");
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Clearing collections...\n");
+            Console.WriteLine("SettingsViewModel: Collections already initialized inline");
+            // Collections are already initialized inline, just clear them to be safe
+            AudioDevices.Clear();
+            KeyboardShortcuts.Clear();
 
-        // Set up validation
-        SetupValidation();
-        
-        // Load data (after commands are set up)
-        LoadAudioDevices();
-        LoadKeyboardShortcuts();
-        LoadFromSettings(_workingSettings);
+            File.AppendAllText(logPath, "SettingsViewModel: Creating commands...\n");
+            Console.WriteLine("SettingsViewModel: Creating commands...");
+            // Commands
+            File.AppendAllText(logPath, "SettingsViewModel: Creating BrowseMediaDirectoryCommand...\n");
+            BrowseMediaDirectoryCommand = ReactiveCommand.CreateFromTask(BrowseMediaDirectoryAsync);
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Creating TestAudioCommand...\n");
+            TestAudioCommand = ReactiveCommand.Create(TestAudio, 
+                this.WhenAnyValue(x => x.SelectedAudioDevice)
+                    .ObserveOn(RxApp.MainThreadScheduler)
+                    .Select(d => !string.IsNullOrEmpty(d)));
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Creating ResetShortcutCommand...\n");
+            ResetShortcutCommand = ReactiveCommand.Create<KeyboardShortcutItem>(ResetShortcut);
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Creating ResetToDefaultsCommand...\n");
+            ResetToDefaultsCommand = ReactiveCommand.CreateFromTask(ResetToDefaultsAsync);
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Creating OkCommand...\n");
+            OkCommand = ReactiveCommand.CreateFromTask(OkAsync, 
+                this.WhenAnyValue(x => x.HasValidationErrors)
+                    .ObserveOn(RxApp.MainThreadScheduler)
+                    .Select(hasErrors => !hasErrors));
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Creating CancelCommand...\n");
+            CancelCommand = ReactiveCommand.Create(Cancel);
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Creating ApplyCommand...\n");
+            ApplyCommand = ReactiveCommand.CreateFromTask(ApplyAsync, 
+                this.WhenAnyValue(x => x.HasValidationErrors)
+                    .ObserveOn(RxApp.MainThreadScheduler)
+                    .Select(hasErrors => !hasErrors));
+
+            File.AppendAllText(logPath, "SettingsViewModel: Setting up validation...\n");
+            Console.WriteLine("SettingsViewModel: Setting up validation...");
+            // Set up validation
+            SetupValidation();
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Loading audio devices...\n");
+            Console.WriteLine("SettingsViewModel: Loading audio devices...");
+            // Load data (after commands are set up)
+            LoadAudioDevices();
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Loading keyboard shortcuts...\n");
+            Console.WriteLine("SettingsViewModel: Loading keyboard shortcuts...");
+            LoadKeyboardShortcuts();
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Loading from settings...\n");
+            Console.WriteLine("SettingsViewModel: Loading from settings...");
+            LoadFromSettings(_workingSettings);
+            
+            File.AppendAllText(logPath, "SettingsViewModel: Initialization complete!\n");
+            Console.WriteLine("SettingsViewModel: Initialization complete!");
+        }
+        catch (Exception ex)
+        {
+            File.AppendAllText(logPath, $"SettingsViewModel: EXCEPTION - {ex.Message}\n");
+            File.AppendAllText(logPath, $"SettingsViewModel: Stack trace - {ex.StackTrace}\n");
+            Console.WriteLine($"SettingsViewModel: ERROR during initialization: {ex.Message}");
+            Console.WriteLine($"SettingsViewModel: Stack trace: {ex.StackTrace}");
+            throw; // Re-throw to let the caller handle it
+        }
     }
 
     #region Properties
@@ -135,7 +234,7 @@ public class SettingsViewModel : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _audioBoostEnabled, value);
     }
 
-    public ObservableCollection<string> AudioDevices { get; }
+    public ObservableCollection<string> AudioDevices { get; } = new ObservableCollection<string>();
 
     public string SelectedAudioDevice
     {
@@ -175,7 +274,7 @@ public class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     // Keyboard Tab
-    public ObservableCollection<KeyboardShortcutItem> KeyboardShortcuts { get; }
+    public ObservableCollection<KeyboardShortcutItem> KeyboardShortcuts { get; } = new ObservableCollection<KeyboardShortcutItem>();
 
     // Performance Tab
     public int PreloadBufferSize
@@ -419,38 +518,56 @@ public class SettingsViewModel : ViewModelBase, IDisposable
     {
         try
         {
+            Console.WriteLine("LoadAudioDevices: Starting...");
+            AudioDevices.Clear();
+            
             if (_mediaPlayerController != null)
             {
+                Console.WriteLine("LoadAudioDevices: Getting devices from controller...");
                 var devices = _mediaPlayerController.GetAudioDevices();
-                AudioDevices.Clear();
+                Console.WriteLine($"LoadAudioDevices: Found {devices?.Count ?? 0} devices");
                 
-                foreach (var device in devices)
+                if (devices != null && devices.Count > 0)
                 {
-                    AudioDevices.Add(device.Name);
+                    foreach (var device in devices)
+                    {
+                        if (device != null && !string.IsNullOrEmpty(device.Name))
+                        {
+                            AudioDevices.Add(device.Name);
+                        }
+                    }
                 }
 
                 // Set selected device from settings
-                var currentDevice = _workingSettings.AudioOutputDevice;
+                var currentDevice = _workingSettings?.AudioOutputDevice;
                 if (!string.IsNullOrEmpty(currentDevice) && AudioDevices.Contains(currentDevice))
                 {
                     SelectedAudioDevice = currentDevice;
+                    Console.WriteLine($"LoadAudioDevices: Selected device from settings: {currentDevice}");
                 }
                 else if (AudioDevices.Count > 0)
                 {
                     SelectedAudioDevice = AudioDevices[0];
+                    Console.WriteLine($"LoadAudioDevices: Selected first device: {AudioDevices[0]}");
                 }
             }
-            else
+            
+            // Always ensure we have at least one device
+            if (AudioDevices.Count == 0)
             {
-                // Fallback if media player controller is not available
+                Console.WriteLine("LoadAudioDevices: No devices found, adding default");
                 AudioDevices.Add("Default Audio Device");
                 SelectedAudioDevice = "Default Audio Device";
             }
+            
+            Console.WriteLine($"LoadAudioDevices: Complete. Total devices: {AudioDevices.Count}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading audio devices: {ex.Message}");
+            Console.WriteLine($"LoadAudioDevices: ERROR - {ex.Message}");
+            Console.WriteLine($"LoadAudioDevices: Stack trace - {ex.StackTrace}");
             // Fallback
+            AudioDevices.Clear();
             AudioDevices.Add("Default Audio Device");
             SelectedAudioDevice = "Default Audio Device";
         }
@@ -518,39 +635,67 @@ public class SettingsViewModel : ViewModelBase, IDisposable
 
     private void LoadFromSettings(AppSettings settings)
     {
-        // General
-        MediaDirectory = settings.MediaDirectory;
-        DisplayModeIndex = settings.DisplayMode == DisplayMode.Single ? 0 : 1;
-        AutoPlayEnabled = settings.AutoPlayEnabled;
-        ShuffleMode = settings.ShuffleMode;
-
-        // Audio
-        VolumePercent = settings.Volume * 100.0;
-        AudioBoostEnabled = settings.AudioBoostEnabled;
-        CrossfadeEnabled = settings.CrossfadeEnabled;
-        CrossfadeDuration = settings.CrossfadeDuration;
-        
-        // Set audio device
-        if (!string.IsNullOrEmpty(settings.AudioOutputDevice) && AudioDevices.Contains(settings.AudioOutputDevice))
+        try
         {
-            SelectedAudioDevice = settings.AudioOutputDevice;
+            Console.WriteLine("LoadFromSettings: Starting...");
+            
+            // General
+            MediaDirectory = settings.MediaDirectory ?? string.Empty;
+            Console.WriteLine($"LoadFromSettings: MediaDirectory = {MediaDirectory}");
+            
+            DisplayModeIndex = settings.DisplayMode == DisplayMode.Single ? 0 : 1;
+            AutoPlayEnabled = settings.AutoPlayEnabled;
+            ShuffleMode = settings.ShuffleMode;
+
+            // Audio
+            VolumePercent = settings.Volume * 100.0;
+            AudioBoostEnabled = settings.AudioBoostEnabled;
+            CrossfadeEnabled = settings.CrossfadeEnabled;
+            CrossfadeDuration = settings.CrossfadeDuration;
+            
+            Console.WriteLine($"LoadFromSettings: Audio settings loaded, checking device...");
+            
+            // Set audio device
+            if (!string.IsNullOrEmpty(settings.AudioOutputDevice) && AudioDevices != null && AudioDevices.Contains(settings.AudioOutputDevice))
+            {
+                SelectedAudioDevice = settings.AudioOutputDevice;
+                Console.WriteLine($"LoadFromSettings: Selected device from settings: {SelectedAudioDevice}");
+            }
+            else if (AudioDevices != null && AudioDevices.Count > 0)
+            {
+                SelectedAudioDevice = AudioDevices[0];
+                Console.WriteLine($"LoadFromSettings: Selected first device: {SelectedAudioDevice}");
+            }
+            else
+            {
+                SelectedAudioDevice = "default";
+                Console.WriteLine("LoadFromSettings: No devices available, using 'default'");
+            }
+
+            // Display
+            ThemeIndex = settings.Theme?.Equals("dark", StringComparison.OrdinalIgnoreCase) == true ? 0 : 1;
+            FontSize = settings.FontSize;
+            VisualizationStyleIndex = (settings.VisualizationStyle ?? "bars").ToLowerInvariant() switch
+            {
+                "bars" => 0,
+                "waveform" => 1,
+                "circular" => 2,
+                "particles" => 3,
+                _ => 0
+            };
+
+            // Performance
+            PreloadBufferSize = settings.PreloadBufferSize;
+            CacheSize = settings.CacheSize;
+            
+            Console.WriteLine("LoadFromSettings: Complete!");
         }
-
-        // Display
-        ThemeIndex = settings.Theme.Equals("dark", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
-        FontSize = settings.FontSize;
-        VisualizationStyleIndex = settings.VisualizationStyle.ToLowerInvariant() switch
+        catch (Exception ex)
         {
-            "bars" => 0,
-            "waveform" => 1,
-            "circular" => 2,
-            "particles" => 3,
-            _ => 0
-        };
-
-        // Performance
-        PreloadBufferSize = settings.PreloadBufferSize;
-        CacheSize = settings.CacheSize;
+            Console.WriteLine($"Error in LoadFromSettings: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            throw;
+        }
     }
 
     private void SaveToSettings(AppSettings settings)
@@ -591,18 +736,18 @@ public class SettingsViewModel : ViewModelBase, IDisposable
     {
         return new AppSettings
         {
-            Id = source.Id,
-            MediaDirectory = source.MediaDirectory,
+            Id = source.Id ?? "default",
+            MediaDirectory = source.MediaDirectory ?? string.Empty,
             DisplayMode = source.DisplayMode,
             Volume = source.Volume,
             AudioBoostEnabled = source.AudioBoostEnabled,
-            AudioOutputDevice = source.AudioOutputDevice,
+            AudioOutputDevice = source.AudioOutputDevice ?? "default",
             CrossfadeEnabled = source.CrossfadeEnabled,
             CrossfadeDuration = source.CrossfadeDuration,
             AutoPlayEnabled = source.AutoPlayEnabled,
             ShuffleMode = source.ShuffleMode,
-            VisualizationStyle = source.VisualizationStyle,
-            Theme = source.Theme,
+            VisualizationStyle = source.VisualizationStyle ?? "bars",
+            Theme = source.Theme ?? "dark",
             FontSize = source.FontSize,
             PreloadBufferSize = source.PreloadBufferSize,
             CacheSize = source.CacheSize,

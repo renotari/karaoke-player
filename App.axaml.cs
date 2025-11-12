@@ -37,6 +37,13 @@ public partial class App : Application
     private ICacheManager? _cacheManager;
     private MainWindowViewModel? _mainWindowViewModel;
 
+    // Public properties for service access
+    public static App? Current => Application.Current as App;
+    public ISettingsManager? SettingsManager => _settingsManager;
+    public IMediaPlayerController? MediaPlayerController => _mediaPlayerController;
+    public ISearchEngine? SearchEngine => _searchEngine;
+    public IMediaLibraryManager? MediaLibraryManager => _mediaLibraryManager;
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);

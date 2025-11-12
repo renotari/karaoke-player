@@ -57,8 +57,8 @@
         <!-- Menu Bar -->
         <Menu Grid.Row="0">
             <MenuItem Header="_File">
-                <MenuItem Header="_Open Media Directory..." />
-                <MenuItem Header="_Exit" />
+                <MenuItem Header="_Open Media Directory..." Command="{Binding OpenMediaDirectoryCommand}" />
+                <MenuItem Header="_Exit" Command="{Binding ExitCommand}" />
             </MenuItem>
             <MenuItem Header="_View">
                 <MenuItem Header="_Toggle Video Mode" Command="{Binding ToggleVideoModeCommand}" />
@@ -67,16 +67,16 @@
                 <MenuItem Header="_Fullscreen" />
             </MenuItem>
             <MenuItem Header="_Playback">
-                <MenuItem Header="_Play/Pause" />
-                <MenuItem Header="_Stop" />
-                <MenuItem Header="_Next" />
-                <MenuItem Header="_Previous" />
+                <MenuItem Header="_Play/Pause" Command="{Binding PlayPauseCommand}" />
+                <MenuItem Header="_Stop" Command="{Binding StopCommand}" />
+                <MenuItem Header="_Next" Command="{Binding NextCommand}" />
+                <MenuItem Header="_Previous" Command="{Binding PreviousCommand}" />
             </MenuItem>
             <MenuItem Header="_Settings">
-                <MenuItem Header="_Preferences..." />
+                <MenuItem Header="_Preferences..." Command="{Binding OpenSettingsCommand}" />
             </MenuItem>
             <MenuItem Header="_Help">
-                <MenuItem Header="_About" />
+                <MenuItem Header="_About" Command="{Binding ShowAboutCommand}" />
             </MenuItem>
         </Menu>
 

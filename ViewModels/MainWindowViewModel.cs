@@ -131,6 +131,12 @@ public partial class MainWindowViewModel : ViewModelBase
         CollapseControlHandleCommand = ReactiveCommand.Create(CollapseControlHandle);
         AddToPlaylistFromVideoModeCommand = ReactiveCommand.CreateFromTask<MediaFile>(async file => await AddToPlaylistAsync(file, "next"));
 
+        // Menu commands
+        OpenMediaDirectoryCommand = ReactiveCommand.CreateFromTask(OpenMediaDirectoryAsync);
+        OpenSettingsCommand = ReactiveCommand.Create(OpenSettings);
+        ShowAboutCommand = ReactiveCommand.Create(ShowAbout);
+        ExitCommand = ReactiveCommand.Create(Exit);
+
         // Initialize collapse timer
         _handleCollapseTimer = new System.Timers.Timer(3000); // 3 seconds
         _handleCollapseTimer.Elapsed += (s, e) => CollapseControlHandle();
@@ -322,6 +328,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ExpandControlHandleCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CollapseControlHandleCommand { get; private set; } = null!;
     public ReactiveCommand<MediaFile, Unit> AddToPlaylistFromVideoModeCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> OpenMediaDirectoryCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ShowAboutCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ExitCommand { get; private set; } = null!;
 
     // Command implementations
     private void ClearSearch()
@@ -956,7 +966,7 @@ public partial class MainWindowViewModel : ViewModelBase
         StatusMessage = "Opening Settings...";
         
         // Use ReactiveUI MessageBus to request window opening
-        ReactiveUI.MessageBus.Current.SendMessage(new OpenSettingsMessage());
+        ReactiveUI.MessageBus.Current.SendMessage(new Services.OpenSettingsMessage());
     }
 
     public void RefreshLibrary()
@@ -982,8 +992,39 @@ public partial class MainWindowViewModel : ViewModelBase
         StatusMessage = "Dialog closed";
     }
 
+    public async Task OpenMediaDirectoryAsync()
+    {
+        // Use ReactiveUI MessageBus to request folder picker
+        ReactiveUI.MessageBus.Current.SendMessage(new OpenMediaDirectoryMessage());
+    }
+
+    public void ShowAbout()
+    {
+        // Use ReactiveUI MessageBus to request about dialog
+        ReactiveUI.MessageBus.Current.SendMessage(new ShowAboutMessage());
+    }
+
+    public void Exit()
+    {
+        // Use ReactiveUI MessageBus to request application exit
+        ReactiveUI.MessageBus.Current.SendMessage(new ExitApplicationMessage());
+    }
+
     public void Dispose()
     {
         _handleCollapseTimer?.Dispose();
     }
+
+    /// <summary>
+    /// Gets the playlist manager for use by child windows
+    /// </summary>
+    public IPlaylistManager? GetPlaylistManager()
+    {
+        return _playlistManager;
+    }
 }
+
+// Message classes for inter-component communication
+public class OpenMediaDirectoryMessage { }
+public class ShowAboutMessage { }
+public class ExitApplicationMessage { }
