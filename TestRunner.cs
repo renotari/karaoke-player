@@ -16,6 +16,16 @@ public static class TestRunner
 
         try
         {
+            // Run MetadataExtractor tests
+            await MetadataExtractorTest.RunTests();
+
+            Console.WriteLine();
+
+            // Run SettingsManager tests
+            await SettingsManagerTest.RunTests();
+
+            Console.WriteLine();
+
             // Run CacheManager tests
             await CacheManagerTest.RunTests();
 

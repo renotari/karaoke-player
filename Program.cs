@@ -20,12 +20,24 @@ sealed class Program
             return;
         }
 
+        // Check if running unit tests specifically (Task 31)
+        if (args.Contains("--unit-tests"))
+        {
+            RunUnitTests().GetAwaiter().GetResult();
+            return;
+        }
+
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
     private static async Task RunTests()
     {
         await TestRunner.Main(Array.Empty<string>());
+    }
+
+    private static async Task RunUnitTests()
+    {
+        await KaraokePlayer.RunUnitTests.Main(Array.Empty<string>());
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.
