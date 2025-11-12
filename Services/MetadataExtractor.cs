@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using KaraokePlayer.Models;
-using MediaInfo;
+using MediaInfo.DotNetWrapper;
 using Microsoft.EntityFrameworkCore;
 
 namespace KaraokePlayer.Services;
@@ -48,30 +48,47 @@ public class MetadataExtractor : IMetadataExtractor, IDisposable
             var fileInfo = new FileInfo(mediaFile.FilePath);
             metadata.FileSize = fileInfo.Length;
 
-            var mediaInfo = new MediaInfoWrapper(mediaFile.FilePath);
+            using var mediaInfo = new MediaInfo.DotNetWrapper.MediaInfo();
+            mediaInfo.Open(mediaFile.FilePath);
 
             // Extract duration (in milliseconds, convert to seconds)
-            var durationMs = mediaInfo.Duration;
-            metadata.Duration = durationMs / 1000.0;
+            var durationStr = mediaInfo.Get(MediaInfo.DotNetWrapper.Enumerations.StreamKind.General, 0, "Duration");
+            if (double.TryParse(durationStr, out var durationMs))
+            {
+                metadata.Duration = durationMs / 1000.0;
+            }
 
             // Extract resolution
-            var width = mediaInfo.Width;
-            var height = mediaInfo.Height;
-            if (width > 0 && height > 0)
+            var widthStr = mediaInfo.Get(MediaInfo.DotNetWrapper.Enumerations.StreamKind.Video, 0, "Width");
+            var heightStr = mediaInfo.Get(MediaInfo.DotNetWrapper.Enumerations.StreamKind.Video, 0, "Height");
+            if (int.TryParse(widthStr, out var width) && int.TryParse(heightStr, out var height))
             {
                 metadata.ResolutionWidth = width;
                 metadata.ResolutionHeight = height;
             }
 
-            // Check for subtitles - MediaInfo.Wrapper doesn't expose text stream count directly
-            // We'll set this to false for now and can enhance later with direct MediaInfo library
-            metadata.HasSubtitles = false;
+            // Check for subtitles
+            var textStreamCount = mediaInfo.CountGet(MediaInfo.DotNetWrapper.Enumerations.StreamKind.Text);
+            metadata.HasSubtitles = textStreamCount > 0;
 
             // Try to extract artist and title from video metadata
-            // MediaInfo.Wrapper has limited metadata exposure, so we'll parse filename
-            var parsed = ParseFilename(Path.GetFileNameWithoutExtension(mediaFile.Filename));
-            metadata.Artist = parsed.Artist;
-            metadata.Title = parsed.Title;
+            var artist = mediaInfo.Get(MediaInfo.DotNetWrapper.Enumerations.StreamKind.General, 0, "Performer");
+            var title = mediaInfo.Get(MediaInfo.DotNetWrapper.Enumerations.StreamKind.General, 0, "Title");
+            
+            if (string.IsNullOrWhiteSpace(artist) && string.IsNullOrWhiteSpace(title))
+            {
+                // Fallback to filename parsing
+                var parsed = ParseFilename(Path.GetFileNameWithoutExtension(mediaFile.Filename));
+                metadata.Artist = parsed.Artist;
+                metadata.Title = parsed.Title;
+            }
+            else
+            {
+                metadata.Artist = artist ?? string.Empty;
+                metadata.Title = title ?? string.Empty;
+            }
+
+            mediaInfo.Close();
         }
         catch (Exception ex)
         {
