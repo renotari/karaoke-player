@@ -67,3 +67,18 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Deployment and installer artifacts
+installer/
+*.exe
+!Setup.iss
+publish/
+*.msi
+*.zip
+
+# Code signing certificates (NEVER commit these!)
+*.pfx
+*.p12
+*.cer
+*.crt
+*.key

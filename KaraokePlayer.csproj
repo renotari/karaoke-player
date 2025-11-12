@@ -6,11 +6,39 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    
+    <!-- Application Metadata -->
+    <AssemblyName>KaraokePlayer</AssemblyName>
+    <Product>Karaoke Player</Product>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Company>Karaoke Player</Company>
+    <Copyright>Copyright © 2024</Copyright>
+    <Description>Professional karaoke and media player with crossfade transitions and dual-screen support</Description>
+    
+    <!-- Application Icon -->
+    <ApplicationIcon>Assets\avalonia-logo.ico</ApplicationIcon>
+    
+    <!-- Publishing Configuration -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <!-- Copy LibVLC native binaries to output -->
+  <ItemGroup>
+    <None Include="$(NuGetPackageRoot)videolan.libvlc.windows\3.0.21\build\**\*.*">
+      <Link>libvlc\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
