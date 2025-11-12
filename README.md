@@ -71,6 +71,16 @@ A professional karaoke and media player application for Windows with advanced fe
 2. Extract the application files to your desired location
 3. Run `KaraokePlayer.exe`
 
+## Documentation
+
+For detailed documentation, see the [docs/](docs/) directory:
+
+- **[Quick Start Guide](docs/QUICKSTART.md)** - Get started quickly
+- **[Manual Testing Guide](docs/MANUAL_TESTING_GUIDE.md)** - Testing procedures
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Deployment instructions
+- **[Unit Tests](docs/UNIT_TESTS_TASK31_SUMMARY.md)** - Unit test documentation
+- **[Integration Tests](docs/INTEGRATION_TESTS_SUMMARY.md)** - Integration test documentation
+
 ## Getting Started
 
 ### First Launch
