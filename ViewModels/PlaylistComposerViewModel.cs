@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
-using ReactiveUI;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using ReactiveUI; // Keep for throttled search and RxApp.MainThreadScheduler
 using KaraokePlayer.Models;
 using KaraokePlayer.Services;
 
@@ -18,19 +20,35 @@ namespace KaraokePlayer.ViewModels;
 /// ViewModel for the Playlist Composer window.
 /// Provides functionality for building playlists with catalog browsing, filtering, and drag-and-drop.
 /// </summary>
-public class PlaylistComposerViewModel : ViewModelBase
+public partial class PlaylistComposerViewModel : ViewModelBase, IDisposable
 {
     private readonly IMediaLibraryManager? _mediaLibraryManager;
     private readonly IPlaylistManager? _playlistManager;
+    private readonly CompositeDisposable _disposables = new();
     private Window? _window;
     
+    [ObservableProperty]
     private string _playlistName = string.Empty;
+    
+    [ObservableProperty]
     private string _catalogSearchQuery = string.Empty;
+    
+    [ObservableProperty]
     private string? _selectedArtistFilter;
+    
+    [ObservableProperty]
     private MediaFile? _selectedCompositionItem;
+    
+    [ObservableProperty]
     private TimeSpan _totalDuration;
+    
+    [ObservableProperty]
     private bool _hasSelectedCatalogItems;
+    
+    [ObservableProperty]
     private bool _canMoveUp;
+    
+    [ObservableProperty]
     private bool _canMoveDown;
 
     public PlaylistComposerViewModel()
@@ -65,32 +83,19 @@ public class PlaylistComposerViewModel : ViewModelBase
 
     private void InitializeCommands()
     {
-        ClearCatalogSearchCommand = ReactiveCommand.Create(ClearCatalogSearch);
-        AddSelectedCommand = ReactiveCommand.Create(AddSelected);
-        AddSingleSongCommand = ReactiveCommand.Create<MediaFile>(AddSingleSong);
-        RemoveCommand = ReactiveCommand.Create<MediaFile>(Remove);
-        ClearCommand = ReactiveCommand.CreateFromTask(ClearAsync);
-        ShuffleCommand = ReactiveCommand.Create(Shuffle);
-        MoveUpCommand = ReactiveCommand.Create(MoveUp);
-        MoveDownCommand = ReactiveCommand.Create(MoveDown);
-        LoadPlaylistCommand = ReactiveCommand.CreateFromTask(LoadPlaylistAsync);
-        SavePlaylistCommand = ReactiveCommand.CreateFromTask(SavePlaylistAsync);
-        SaveAndLoadForPlayCommand = ReactiveCommand.CreateFromTask(SaveAndLoadForPlayAsync);
-        CloseCommand = ReactiveCommand.Create(Close);
+        // Commands are auto-generated via RelayCommand attributes
     }
 
     private void SetupPropertyObservers()
     {
-        // Monitor search query changes and apply filtering
-        this.WhenAnyValue(x => x.CatalogSearchQuery)
+        // Monitor search query changes with throttling (KEEP ReactiveUI for this)
+        var throttledSearch = this.WhenAnyValue(x => x.CatalogSearchQuery)
             .Throttle(TimeSpan.FromMilliseconds(300))
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(_ => ApplyFiltering());
+        _disposables.Add(throttledSearch);
 
-        // Monitor artist filter changes and apply filtering
-        this.WhenAnyValue(x => x.SelectedArtistFilter)
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(_ => ApplyFiltering());
+        // Artist filter and other property changes now handled via partial OnChanged methods
 
         // Monitor selected catalog items
         SelectedCatalogItems.CollectionChanged += (s, e) =>
@@ -98,9 +103,7 @@ public class PlaylistComposerViewModel : ViewModelBase
             HasSelectedCatalogItems = SelectedCatalogItems.Count > 0;
         };
 
-        // Monitor selected composition item for move buttons
-        this.WhenAnyValue(x => x.SelectedCompositionItem)
-            .Subscribe(_ => UpdateMoveButtonStates());
+        // Selected composition item now handled via partial OnSelectedCompositionItemChanged
 
         // Monitor composed playlist changes
         ComposedPlaylist.CollectionChanged += (s, e) =>
@@ -117,67 +120,23 @@ public class PlaylistComposerViewModel : ViewModelBase
     public ObservableCollection<MediaFile> SelectedCatalogItems { get; private set; }
     public ObservableCollection<string> ArtistFilterOptions { get; private set; }
 
-    public string PlaylistName
+    // Partial methods for property change notifications
+    partial void OnCatalogSearchQueryChanged(string value)
     {
-        get => _playlistName;
-        set => this.RaiseAndSetIfChanged(ref _playlistName, value);
+        // Throttling handled in SetupPropertyObservers
     }
 
-    public string CatalogSearchQuery
+    partial void OnSelectedArtistFilterChanged(string? value)
     {
-        get => _catalogSearchQuery;
-        set => this.RaiseAndSetIfChanged(ref _catalogSearchQuery, value);
+        ApplyFiltering();
     }
 
-    public string? SelectedArtistFilter
+    partial void OnSelectedCompositionItemChanged(MediaFile? value)
     {
-        get => _selectedArtistFilter;
-        set => this.RaiseAndSetIfChanged(ref _selectedArtistFilter, value);
+        UpdateMoveButtonStates();
     }
 
-    public MediaFile? SelectedCompositionItem
-    {
-        get => _selectedCompositionItem;
-        set => this.RaiseAndSetIfChanged(ref _selectedCompositionItem, value);
-    }
-
-    public TimeSpan TotalDuration
-    {
-        get => _totalDuration;
-        set => this.RaiseAndSetIfChanged(ref _totalDuration, value);
-    }
-
-    public bool HasSelectedCatalogItems
-    {
-        get => _hasSelectedCatalogItems;
-        set => this.RaiseAndSetIfChanged(ref _hasSelectedCatalogItems, value);
-    }
-
-    public bool CanMoveUp
-    {
-        get => _canMoveUp;
-        set => this.RaiseAndSetIfChanged(ref _canMoveUp, value);
-    }
-
-    public bool CanMoveDown
-    {
-        get => _canMoveDown;
-        set => this.RaiseAndSetIfChanged(ref _canMoveDown, value);
-    }
-
-    // Commands
-    public ReactiveCommand<Unit, Unit> ClearCatalogSearchCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> AddSelectedCommand { get; private set; }
-    public ReactiveCommand<MediaFile, Unit> AddSingleSongCommand { get; private set; }
-    public ReactiveCommand<MediaFile, Unit> RemoveCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> ClearCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> ShuffleCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> MoveUpCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> MoveDownCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> LoadPlaylistCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> SavePlaylistCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> SaveAndLoadForPlayCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> CloseCommand { get; private set; }
+    // Commands are auto-generated via RelayCommand attributes
 
     /// <summary>
     /// Sets the window reference for file dialogs
@@ -300,11 +259,13 @@ public class PlaylistComposerViewModel : ViewModelBase
 
     // Command implementations
 
+    [RelayCommand]
     private void ClearCatalogSearch()
     {
         CatalogSearchQuery = string.Empty;
     }
 
+    [RelayCommand]
     private void AddSelected()
     {
         if (SelectedCatalogItems.Count == 0) return;
@@ -315,19 +276,22 @@ public class PlaylistComposerViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
     private void AddSingleSong(MediaFile file)
     {
         if (file == null) return;
         ComposedPlaylist.Add(file);
     }
 
+    [RelayCommand]
     private void Remove(MediaFile file)
     {
         if (file == null) return;
         ComposedPlaylist.Remove(file);
     }
 
-    private async Task ClearAsync()
+    [RelayCommand]
+    private async Task Clear()
     {
         if (ComposedPlaylist.Count == 0) return;
 
@@ -345,6 +309,7 @@ public class PlaylistComposerViewModel : ViewModelBase
         ComposedPlaylist.Clear();
     }
 
+    [RelayCommand]
     private void Shuffle()
     {
         if (ComposedPlaylist.Count <= 1) return;
@@ -359,6 +324,7 @@ public class PlaylistComposerViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
     private void MoveUp()
     {
         if (SelectedCompositionItem == null) return;
@@ -369,6 +335,7 @@ public class PlaylistComposerViewModel : ViewModelBase
         ComposedPlaylist.Move(index, index - 1);
     }
 
+    [RelayCommand]
     private void MoveDown()
     {
         if (SelectedCompositionItem == null) return;
@@ -379,7 +346,8 @@ public class PlaylistComposerViewModel : ViewModelBase
         ComposedPlaylist.Move(index, index + 1);
     }
 
-    private async Task LoadPlaylistAsync()
+    [RelayCommand]
+    private async Task LoadPlaylist()
     {
         if (_window == null) return;
 
@@ -450,7 +418,8 @@ public class PlaylistComposerViewModel : ViewModelBase
         PlaylistName = Path.GetFileNameWithoutExtension(filePath);
     }
 
-    private async Task SavePlaylistAsync()
+    [RelayCommand]
+    private async Task SavePlaylist()
     {
         if (ComposedPlaylist.Count == 0) return;
         if (_window == null) return;
@@ -515,7 +484,8 @@ public class PlaylistComposerViewModel : ViewModelBase
         await File.WriteAllLinesAsync(filePath, lines);
     }
 
-    private async Task SaveAndLoadForPlayAsync()
+    [RelayCommand]
+    private async Task SaveAndLoadForPlay()
     {
         if (ComposedPlaylist.Count == 0) return;
         if (_playlistManager == null) return;
@@ -555,6 +525,7 @@ public class PlaylistComposerViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
     private void Close()
     {
         _window?.Close();
@@ -577,5 +548,10 @@ public class PlaylistComposerViewModel : ViewModelBase
 
         // For now, just log. In a full implementation, this would show a proper error dialog.
         Console.WriteLine($"{title}: {message}");
+    }
+
+    public void Dispose()
+    {
+        _disposables.Dispose();
     }
 }

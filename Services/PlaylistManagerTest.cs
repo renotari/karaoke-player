@@ -45,8 +45,8 @@ public class PlaylistManagerTest
 
     public async Task<bool> TestAddSongToEnd()
     {
-        using var context = CreateInMemoryContext();
-        var manager = new PlaylistManager(context);
+        var factory = new TestDbContextFactory();
+        var manager = new PlaylistManager(factory);
 
         var mediaFile1 = CreateTestMediaFile("1", "song1.mp4");
         var mediaFile2 = CreateTestMediaFile("2", "song2.mp4");
@@ -63,8 +63,8 @@ public class PlaylistManagerTest
 
     public async Task<bool> TestAddSongNext()
     {
-        using var context = CreateInMemoryContext();
-        var manager = new PlaylistManager(context);
+        var factory = new TestDbContextFactory();
+        var manager = new PlaylistManager(factory);
 
         var mediaFile1 = CreateTestMediaFile("1", "song1.mp4");
         var mediaFile2 = CreateTestMediaFile("2", "song2.mp4");
@@ -85,8 +85,8 @@ public class PlaylistManagerTest
 
     public async Task<bool> TestRemoveSong()
     {
-        using var context = CreateInMemoryContext();
-        var manager = new PlaylistManager(context);
+        var factory = new TestDbContextFactory();
+        var manager = new PlaylistManager(factory);
 
         var mediaFile1 = CreateTestMediaFile("1", "song1.mp4");
         var mediaFile2 = CreateTestMediaFile("2", "song2.mp4");
@@ -107,8 +107,8 @@ public class PlaylistManagerTest
 
     public async Task<bool> TestReorderSong()
     {
-        using var context = CreateInMemoryContext();
-        var manager = new PlaylistManager(context);
+        var factory = new TestDbContextFactory();
+        var manager = new PlaylistManager(factory);
 
         var mediaFile1 = CreateTestMediaFile("1", "song1.mp4");
         var mediaFile2 = CreateTestMediaFile("2", "song2.mp4");
@@ -130,8 +130,8 @@ public class PlaylistManagerTest
 
     public async Task<bool> TestClearPlaylist()
     {
-        using var context = CreateInMemoryContext();
-        var manager = new PlaylistManager(context);
+        var factory = new TestDbContextFactory();
+        var manager = new PlaylistManager(factory);
 
         var mediaFile1 = CreateTestMediaFile("1", "song1.mp4");
         var mediaFile2 = CreateTestMediaFile("2", "song2.mp4");
@@ -148,8 +148,8 @@ public class PlaylistManagerTest
 
     public async Task<bool> TestShufflePlaylist()
     {
-        using var context = CreateInMemoryContext();
-        var manager = new PlaylistManager(context);
+        var factory = new TestDbContextFactory();
+        var manager = new PlaylistManager(factory);
 
         var mediaFile1 = CreateTestMediaFile("1", "song1.mp4");
         var mediaFile2 = CreateTestMediaFile("2", "song2.mp4");
@@ -177,8 +177,8 @@ public class PlaylistManagerTest
 
     public async Task<bool> TestDuplicateDetection()
     {
-        using var context = CreateInMemoryContext();
-        var manager = new PlaylistManager(context);
+        var factory = new TestDbContextFactory();
+        var manager = new PlaylistManager(factory);
 
         var mediaFile1 = CreateTestMediaFile("1", "song1.mp4");
 
@@ -197,17 +197,20 @@ public class PlaylistManagerTest
 
     public async Task<bool> TestSaveAndLoadM3UPlaylist()
     {
-        using var context = CreateInMemoryContext();
-        
+        var factory = new TestDbContextFactory();
+
         // Add test media files to database
         var mediaFile1 = CreateTestMediaFile("1", "song1.mp4");
         var mediaFile2 = CreateTestMediaFile("2", "song2.mp4");
-        
-        context.MediaFiles.Add(mediaFile1);
-        context.MediaFiles.Add(mediaFile2);
-        await context.SaveChangesAsync();
 
-        var manager = new PlaylistManager(context);
+        using (var context = factory.CreateDbContext())
+        {
+            context.MediaFiles.Add(mediaFile1);
+            context.MediaFiles.Add(mediaFile2);
+            await context.SaveChangesAsync();
+        }
+
+        var manager = new PlaylistManager(factory);
 
         await manager.AddSongAsync(mediaFile1, "end");
         await manager.AddSongAsync(mediaFile2, "end");
@@ -244,8 +247,8 @@ public class PlaylistManagerTest
 
     public async Task<bool> TestPositionUpdates()
     {
-        using var context = CreateInMemoryContext();
-        var manager = new PlaylistManager(context);
+        var factory = new TestDbContextFactory();
+        var manager = new PlaylistManager(factory);
 
         var mediaFile1 = CreateTestMediaFile("1", "song1.mp4");
         var mediaFile2 = CreateTestMediaFile("2", "song2.mp4");

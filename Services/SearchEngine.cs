@@ -12,13 +12,13 @@ namespace KaraokePlayer.Services;
 /// </summary>
 public class SearchEngine : ISearchEngine
 {
-    private readonly KaraokeDbContext _dbContext;
+    private readonly IDbContextFactory _dbContextFactory;
     private readonly PerformanceMonitor? _performanceMonitor;
     private const int MaxHistoryItems = 10;
 
-    public SearchEngine(KaraokeDbContext dbContext, PerformanceMonitor? performanceMonitor = null)
+    public SearchEngine(IDbContextFactory dbContextFactory, PerformanceMonitor? performanceMonitor = null)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _performanceMonitor = performanceMonitor;
     }
 
@@ -39,10 +39,12 @@ public class SearchEngine : ISearchEngine
         var searchTerm = query.Trim();
         var searchPattern = $"%{searchTerm}%";
 
+        using var context = _dbContextFactory.CreateDbContext();
+
         // Query with LIKE for partial matching on artist, title, and filename
         // Use AsNoTracking for better performance on read-only queries
         // Use composite index on Artist + Title for faster searches
-        var results = await _dbContext.MediaFiles
+        var results = await context.MediaFiles
             .AsNoTracking() // Performance: No change tracking needed for search results
             .Include(m => m.Metadata)
             .Where(m =>
@@ -72,8 +74,10 @@ public class SearchEngine : ISearchEngine
 
         var searchTerm = query.Trim();
 
+        using var context = _dbContextFactory.CreateDbContext();
+
         // Check if this term already exists in history using indexed column
-        var existing = await _dbContext.SearchHistory
+        var existing = await context.SearchHistory
             .Where(h => h.SearchTerm == searchTerm)
             .FirstOrDefaultAsync();
 
@@ -90,10 +94,10 @@ public class SearchEngine : ISearchEngine
                 SearchTerm = searchTerm,
                 SearchedAt = DateTime.UtcNow
             };
-            _dbContext.SearchHistory.Add(historyItem);
+            context.SearchHistory.Add(historyItem);
         }
 
-        await _dbContext.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
         // Maintain only the last 10 searches
         await TrimHistoryAsync();
@@ -104,7 +108,9 @@ public class SearchEngine : ISearchEngine
     /// </summary>
     public async Task<List<string>> GetHistoryAsync()
     {
-        var history = await _dbContext.SearchHistory
+        using var context = _dbContextFactory.CreateDbContext();
+
+        var history = await context.SearchHistory
             .OrderByDescending(h => h.SearchedAt)
             .Take(MaxHistoryItems)
             .Select(h => h.SearchTerm)
@@ -118,9 +124,11 @@ public class SearchEngine : ISearchEngine
     /// </summary>
     public async Task ClearHistoryAsync()
     {
-        var allHistory = await _dbContext.SearchHistory.ToListAsync();
-        _dbContext.SearchHistory.RemoveRange(allHistory);
-        await _dbContext.SaveChangesAsync();
+        using var context = _dbContextFactory.CreateDbContext();
+
+        var allHistory = await context.SearchHistory.ToListAsync();
+        context.SearchHistory.RemoveRange(allHistory);
+        await context.SaveChangesAsync();
     }
 
     /// <summary>
@@ -189,17 +197,19 @@ public class SearchEngine : ISearchEngine
     /// </summary>
     private async Task TrimHistoryAsync()
     {
-        var historyCount = await _dbContext.SearchHistory.CountAsync();
+        using var context = _dbContextFactory.CreateDbContext();
+
+        var historyCount = await context.SearchHistory.CountAsync();
 
         if (historyCount > MaxHistoryItems)
         {
-            var itemsToRemove = await _dbContext.SearchHistory
+            var itemsToRemove = await context.SearchHistory
                 .OrderBy(h => h.SearchedAt)
                 .Take(historyCount - MaxHistoryItems)
                 .ToListAsync();
 
-            _dbContext.SearchHistory.RemoveRange(itemsToRemove);
-            await _dbContext.SaveChangesAsync();
+            context.SearchHistory.RemoveRange(itemsToRemove);
+            await context.SaveChangesAsync();
         }
     }
 }

@@ -33,6 +33,10 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     private int _originalCurrentVolume;
     private bool _isPreloadedPlayerActive = false;
 
+    // Crossfade failure protection
+    private int _skipAttempts = 0;
+    private const int MAX_SKIP_ATTEMPTS = 3;
+
     public PlaybackState State
     {
         get
@@ -349,6 +353,7 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     private void OnPlaying(object? sender, EventArgs e)
     {
         State = PlaybackState.Playing;
+        _skipAttempts = 0; // Reset skip counter on successful playback
         _loggingService?.LogPlaybackEvent("Playing", $"File: {_currentMedia?.Filename ?? "Unknown"}");
     }
 
@@ -487,6 +492,26 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         }
         catch (Exception ex)
         {
+            // Protect against infinite skip loop with unplayable files
+            _skipAttempts++;
+
+            if (_skipAttempts >= MAX_SKIP_ATTEMPTS)
+            {
+                _loggingService?.LogError($"Too many consecutive crossfade failures ({_skipAttempts}). Stopping playback.", ex);
+
+                CancelCrossfade();
+                Stop();
+                _skipAttempts = 0;
+
+                PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
+                {
+                    ErrorMessage = $"Too many consecutive playback failures. Please check your media files.",
+                    MediaFile = _preloadedMedia,
+                    Exception = ex
+                });
+                return;
+            }
+
             // If crossfade fails, cancel it and skip to next song
             _loggingService?.LogCrossfadeTransition(
                 _currentMedia?.Filename ?? "Unknown",
@@ -494,9 +519,9 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
                 false,
                 ex.Message
             );
-            
+
             CancelCrossfade();
-            
+
             PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
             {
                 ErrorMessage = $"Crossfade failed: {ex.Message}",

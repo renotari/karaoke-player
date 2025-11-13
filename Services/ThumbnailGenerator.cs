@@ -15,7 +15,7 @@ namespace KaraokePlayer.Services;
 /// </summary>
 public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
 {
-    private readonly KaraokeDbContext _dbContext;
+    private readonly IDbContextFactory _dbContextFactory;
     private readonly LibVLC _libVLC;
     private readonly ConcurrentQueue<MediaFile> _generationQueue = new();
     private readonly CancellationTokenSource _cancellationTokenSource = new();
@@ -34,9 +34,9 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
     public int QueuedCount => _generationQueue.Count;
     public string CacheDirectory => _cacheDirectory;
 
-    public ThumbnailGenerator(KaraokeDbContext dbContext, LibVLC libVLC)
+    public ThumbnailGenerator(IDbContextFactory dbContextFactory, LibVLC libVLC)
     {
-        _dbContext = dbContext;
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _libVLC = libVLC;
 
         // Set up cache directory in user's app data folder
@@ -106,7 +106,14 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
             // Clean up partial file if it exists
             if (File.Exists(thumbnailPath))
             {
-                try { File.Delete(thumbnailPath); } catch { }
+                try
+                {
+                    File.Delete(thumbnailPath);
+                }
+                catch (Exception deleteEx)
+                {
+                    Console.WriteLine($"Warning: Failed to delete partial thumbnail {thumbnailPath}: {deleteEx.Message}");
+                }
             }
 
             throw new Exception($"Failed to generate video thumbnail: {ex.Message}", ex);
@@ -229,7 +236,9 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
 
         _isProcessing = false;
         _cancellationTokenSource.Cancel();
-        _processingTask?.Wait();
+
+        // Don't block waiting for task - let it complete naturally
+        // The cancellation token will signal it to stop processing
     }
 
     /// <summary>
@@ -310,13 +319,15 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
     /// </summary>
     private async Task UpdateDatabaseAsync(MediaFile mediaFile, string thumbnailPath)
     {
-        var dbMediaFile = await _dbContext.MediaFiles.FindAsync(mediaFile.Id);
+        using var context = _dbContextFactory.CreateDbContext();
+
+        var dbMediaFile = await context.MediaFiles.FindAsync(mediaFile.Id);
         if (dbMediaFile != null)
         {
             dbMediaFile.ThumbnailPath = thumbnailPath;
             dbMediaFile.ThumbnailLoaded = true;
-            _dbContext.MediaFiles.Update(dbMediaFile);
-            await _dbContext.SaveChangesAsync();
+            context.MediaFiles.Update(dbMediaFile);
+            await context.SaveChangesAsync();
         }
     }
 

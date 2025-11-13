@@ -16,7 +16,7 @@ namespace KaraokePlayer.Services;
 /// </summary>
 public class MetadataExtractor : IMetadataExtractor, IDisposable
 {
-    private readonly KaraokeDbContext _dbContext;
+    private readonly IDbContextFactory _dbContextFactory;
     private readonly ConcurrentQueue<MediaFile> _extractionQueue = new();
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private Task? _processingTask;
@@ -28,9 +28,9 @@ public class MetadataExtractor : IMetadataExtractor, IDisposable
     public bool IsProcessing => _isProcessing;
     public int QueuedCount => _extractionQueue.Count;
 
-    public MetadataExtractor(KaraokeDbContext dbContext)
+    public MetadataExtractor(IDbContextFactory dbContextFactory)
     {
-        _dbContext = dbContext;
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
     }
 
     /// <summary>
@@ -255,7 +255,9 @@ public class MetadataExtractor : IMetadataExtractor, IDisposable
 
         _isProcessing = false;
         _cancellationTokenSource.Cancel();
-        _processingTask?.Wait();
+
+        // Don't block waiting for task - let it complete naturally
+        // The cancellation token will signal it to stop processing
     }
 
     /// <summary>
@@ -315,8 +317,10 @@ public class MetadataExtractor : IMetadataExtractor, IDisposable
     /// </summary>
     private async Task UpdateDatabaseAsync(MediaFile mediaFile, MediaMetadata metadata)
     {
+        using var context = _dbContextFactory.CreateDbContext();
+
         // Check if metadata already exists
-        var existingMetadata = await _dbContext.MediaMetadata
+        var existingMetadata = await context.MediaMetadata
             .FirstOrDefaultAsync(m => m.MediaFileId == mediaFile.Id);
 
         if (existingMetadata != null)
@@ -331,23 +335,23 @@ public class MetadataExtractor : IMetadataExtractor, IDisposable
             existingMetadata.FileSize = metadata.FileSize;
             existingMetadata.HasSubtitles = metadata.HasSubtitles;
 
-            _dbContext.MediaMetadata.Update(existingMetadata);
+            context.MediaMetadata.Update(existingMetadata);
         }
         else
         {
             // Add new metadata
-            await _dbContext.MediaMetadata.AddAsync(metadata);
+            await context.MediaMetadata.AddAsync(metadata);
         }
 
         // Update MediaFile to mark metadata as loaded
-        var dbMediaFile = await _dbContext.MediaFiles.FindAsync(mediaFile.Id);
+        var dbMediaFile = await context.MediaFiles.FindAsync(mediaFile.Id);
         if (dbMediaFile != null)
         {
             dbMediaFile.MetadataLoaded = true;
-            _dbContext.MediaFiles.Update(dbMediaFile);
+            context.MediaFiles.Update(dbMediaFile);
         }
 
-        await _dbContext.SaveChangesAsync();
+        await context.SaveChangesAsync();
     }
 
     public void Dispose()

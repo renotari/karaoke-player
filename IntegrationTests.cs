@@ -17,7 +17,7 @@ namespace KaraokePlayer;
 /// </summary>
 public class IntegrationTests
 {
-    private KaraokeDbContext? _dbContext;
+    private IDbContextFactory? _dbContextFactory;
     private ISearchEngine? _searchEngine;
     private IPlaylistManager? _playlistManager;
     private IMediaPlayerController? _mediaPlayerController;
@@ -189,11 +189,14 @@ public class IntegrationTests
                 Duration = 180
             }
         };
-        
+
         // Add to database
-        _dbContext!.MediaFiles.Add(testFile);
-        await _dbContext.SaveChangesAsync();
-        
+        using (var context = _dbContextFactory!.CreateDbContext())
+        {
+            context.MediaFiles.Add(testFile);
+            await context.SaveChangesAsync();
+        }
+
         // Add to playlist
         await _playlistManager!.AddSongAsync(testFile, "end");
         
@@ -372,25 +375,22 @@ public class IntegrationTests
                 Cache = Microsoft.Data.Sqlite.SqliteCacheMode.Shared,
                 Pooling = true
             }.ToString();
-            
-            var optionsBuilder = new DbContextOptionsBuilder<KaraokeDbContext>();
-            optionsBuilder.UseSqlite(connectionString);
 
-            _dbContext = new KaraokeDbContext(optionsBuilder.Options);
-            _dbContext.Database.EnsureCreated();
+            // Create DbContext factory for tests
+            _dbContextFactory = new DbContextFactory(connectionString);
 
             // Create service instances
             _notificationService = new NotificationService();
             _errorHandlingService = new ErrorHandlingService(_notificationService, _loggingService);
             _settingsManager = new SettingsManager();
-            _searchEngine = new SearchEngine(_dbContext);
-            _playlistManager = new PlaylistManager(_dbContext);
+            _searchEngine = new SearchEngine(_dbContextFactory);
+            _playlistManager = new PlaylistManager(_dbContextFactory);
             _mediaPlayerController = new MediaPlayerController(_loggingService);
-            _mediaLibraryManager = new MediaLibraryManager(_dbContext);
-            _metadataExtractor = new MetadataExtractor(_dbContext);
-            
+            _mediaLibraryManager = new MediaLibraryManager(_dbContextFactory);
+            _metadataExtractor = new MetadataExtractor(_dbContextFactory);
+
             var libVLC = new LibVLC();
-            _thumbnailGenerator = new ThumbnailGenerator(_dbContext, libVLC);
+            _thumbnailGenerator = new ThumbnailGenerator(_dbContextFactory, libVLC);
             _keyboardShortcutManager = new KeyboardShortcutManager();
             
             var cacheDirectory = Path.Combine(Path.GetTempPath(), "KaraokePlayerTest_Cache_" + Guid.NewGuid().ToString());
@@ -439,8 +439,8 @@ public class IntegrationTests
             generatorDisposable.Dispose();
         }
 
-        _dbContext?.Dispose();
-        
+        // DbContext factory doesn't need disposal - contexts are disposed via using statements
+
         // Delete test database
         if (!string.IsNullOrEmpty(_testDbPath) && File.Exists(_testDbPath))
         {

@@ -13,7 +13,7 @@ namespace KaraokePlayer.Services;
 /// </summary>
 public class MediaLibraryManager : IMediaLibraryManager, IDisposable
 {
-    private readonly KaraokeDbContext _dbContext;
+    private readonly IDbContextFactory _dbContextFactory;
     private FileSystemWatcher? _fileWatcher;
     private string? _monitoredDirectory;
     private readonly HashSet<string> _supportedExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -28,9 +28,9 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
 
     public bool IsMonitoring => _fileWatcher?.EnableRaisingEvents ?? false;
 
-    public MediaLibraryManager(KaraokeDbContext dbContext)
+    public MediaLibraryManager(IDbContextFactory dbContextFactory)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
     }
 
     /// <summary>
@@ -50,8 +50,10 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
         var mediaFiles = FindMediaFiles(directoryPath);
         var totalFiles = mediaFiles.Count;
 
+        using var context = _dbContextFactory.CreateDbContext();
+
         // Get existing files from database
-        var existingFiles = await _dbContext.MediaFiles
+        var existingFiles = await context.MediaFiles
             .AsNoTracking()
             .ToDictionaryAsync(f => f.FilePath, f => f);
 
@@ -101,22 +103,22 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
         // Update database
         if (filesToAdd.Any())
         {
-            await _dbContext.MediaFiles.AddRangeAsync(filesToAdd);
-            await _dbContext.SaveChangesAsync();
+            await context.MediaFiles.AddRangeAsync(filesToAdd);
+            await context.SaveChangesAsync();
             OnFilesAdded(new MediaFilesChangedEventArgs { Files = filesToAdd });
         }
 
         if (filesToUpdate.Any())
         {
-            _dbContext.MediaFiles.UpdateRange(filesToUpdate);
-            await _dbContext.SaveChangesAsync();
+            context.MediaFiles.UpdateRange(filesToUpdate);
+            await context.SaveChangesAsync();
             OnFilesModified(new MediaFilesChangedEventArgs { Files = filesToUpdate });
         }
 
         if (filesToRemove.Any())
         {
-            _dbContext.MediaFiles.RemoveRange(filesToRemove);
-            await _dbContext.SaveChangesAsync();
+            context.MediaFiles.RemoveRange(filesToRemove);
+            await context.SaveChangesAsync();
             OnFilesRemoved(new MediaFilesChangedEventArgs { Files = filesToRemove });
         }
     }
@@ -126,7 +128,9 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
     /// </summary>
     public async Task<List<MediaFile>> GetMediaFilesAsync()
     {
-        return await _dbContext.MediaFiles
+        using var context = _dbContextFactory.CreateDbContext();
+
+        return await context.MediaFiles
             .Include(f => f.Metadata)
             .OrderBy(f => f.Filename)
             .ToListAsync();
@@ -231,7 +235,12 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
         };
     }
 
-    private async void OnFileCreated(object sender, FileSystemEventArgs e)
+    private void OnFileCreated(object sender, FileSystemEventArgs e)
+    {
+        _ = HandleFileCreatedAsync(e);
+    }
+
+    private async Task HandleFileCreatedAsync(FileSystemEventArgs e)
     {
         if (!IsSupportedMediaFile(e.FullPath))
             return;
@@ -247,42 +256,56 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
             var fileInfo = new FileInfo(e.FullPath);
             var mediaFile = CreateMediaFile(e.FullPath, fileInfo);
 
-            await _dbContext.MediaFiles.AddAsync(mediaFile);
-            await _dbContext.SaveChangesAsync();
+            using var context = _dbContextFactory.CreateDbContext();
+
+            await context.MediaFiles.AddAsync(mediaFile);
+            await context.SaveChangesAsync();
 
             OnFilesAdded(new MediaFilesChangedEventArgs { Files = new List<MediaFile> { mediaFile } });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Log error but don't crash
+            Console.WriteLine($"Error handling file created '{e.FullPath}': {ex.Message}");
         }
     }
 
-    private async void OnFileDeleted(object sender, FileSystemEventArgs e)
+    private void OnFileDeleted(object sender, FileSystemEventArgs e)
+    {
+        _ = HandleFileDeletedAsync(e);
+    }
+
+    private async Task HandleFileDeletedAsync(FileSystemEventArgs e)
     {
         if (!IsSupportedMediaFile(e.FullPath))
             return;
 
         try
         {
-            var mediaFile = await _dbContext.MediaFiles
+            using var context = _dbContextFactory.CreateDbContext();
+
+            var mediaFile = await context.MediaFiles
                 .FirstOrDefaultAsync(f => f.FilePath == e.FullPath);
 
             if (mediaFile != null)
             {
-                _dbContext.MediaFiles.Remove(mediaFile);
-                await _dbContext.SaveChangesAsync();
+                context.MediaFiles.Remove(mediaFile);
+                await context.SaveChangesAsync();
 
                 OnFilesRemoved(new MediaFilesChangedEventArgs { Files = new List<MediaFile> { mediaFile } });
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Log error but don't crash
+            Console.WriteLine($"Error handling file deleted '{e.FullPath}': {ex.Message}");
         }
     }
 
-    private async void OnFileChanged(object sender, FileSystemEventArgs e)
+    private void OnFileChanged(object sender, FileSystemEventArgs e)
+    {
+        _ = HandleFileChangedAsync(e);
+    }
+
+    private async Task HandleFileChangedAsync(FileSystemEventArgs e)
     {
         if (!IsSupportedMediaFile(e.FullPath))
             return;
@@ -295,7 +318,9 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
             if (!File.Exists(e.FullPath))
                 return;
 
-            var mediaFile = await _dbContext.MediaFiles
+            using var context = _dbContextFactory.CreateDbContext();
+
+            var mediaFile = await context.MediaFiles
                 .FirstOrDefaultAsync(f => f.FilePath == e.FullPath);
 
             if (mediaFile != null)
@@ -306,26 +331,33 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
                 mediaFile.MetadataLoaded = false; // Mark for re-extraction
                 mediaFile.ThumbnailLoaded = false;
 
-                _dbContext.MediaFiles.Update(mediaFile);
-                await _dbContext.SaveChangesAsync();
+                context.MediaFiles.Update(mediaFile);
+                await context.SaveChangesAsync();
 
                 OnFilesModified(new MediaFilesChangedEventArgs { Files = new List<MediaFile> { mediaFile } });
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Log error but don't crash
+            Console.WriteLine($"Error handling file changed '{e.FullPath}': {ex.Message}");
         }
     }
 
-    private async void OnFileRenamed(object sender, RenamedEventArgs e)
+    private void OnFileRenamed(object sender, RenamedEventArgs e)
+    {
+        _ = HandleFileRenamedAsync(e);
+    }
+
+    private async Task HandleFileRenamedAsync(RenamedEventArgs e)
     {
         if (!IsSupportedMediaFile(e.FullPath))
             return;
 
         try
         {
-            var mediaFile = await _dbContext.MediaFiles
+            using var context = _dbContextFactory.CreateDbContext();
+
+            var mediaFile = await context.MediaFiles
                 .FirstOrDefaultAsync(f => f.FilePath == e.OldFullPath);
 
             if (mediaFile != null)
@@ -334,15 +366,15 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
                 mediaFile.Filename = Path.GetFileName(e.FullPath);
                 mediaFile.LastModified = DateTime.UtcNow;
 
-                _dbContext.MediaFiles.Update(mediaFile);
-                await _dbContext.SaveChangesAsync();
+                context.MediaFiles.Update(mediaFile);
+                await context.SaveChangesAsync();
 
                 OnFilesModified(new MediaFilesChangedEventArgs { Files = new List<MediaFile> { mediaFile } });
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Log error but don't crash
+            Console.WriteLine($"Error handling file renamed from '{e.OldFullPath}' to '{e.FullPath}': {ex.Message}");
         }
     }
 

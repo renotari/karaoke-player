@@ -142,7 +142,7 @@ public partial class PlaylistComposerWindow : Window
             // Handle drop from catalog - will be fully implemented in task 21
             if (DataContext is PlaylistComposerViewModel vm)
             {
-                vm.AddSelectedCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                vm.AddSelectedCommand.Execute(null);
             }
         }
         else if (e.Data.Contains("CompositionItem"))

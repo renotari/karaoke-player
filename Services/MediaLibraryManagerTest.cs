@@ -47,14 +47,9 @@ public static class MediaLibraryManagerTest
             Console.WriteLine($"✓ Created test directory: {testDir}");
             Console.WriteLine($"✓ Created {testFiles.Length + 2} test files\n");
 
-            // Create SQLite in-memory database for testing
-            var options = new DbContextOptionsBuilder<KaraokeDbContext>()
-                .UseSqlite("DataSource=:memory:")
-                .Options;
-
-            using var dbContext = new KaraokeDbContext(options);
-            await dbContext.Database.EnsureCreatedAsync();
-            using var manager = new MediaLibraryManager(dbContext);
+            // Create test factory for in-memory database
+            var factory = new TestDbContextFactory();
+            using var manager = new MediaLibraryManager(factory);
 
             // Test 1: Scan directory
             Console.WriteLine("Test 1: Scanning directory...");

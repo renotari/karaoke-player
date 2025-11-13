@@ -3,96 +3,133 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Reactive;
-using System.Reactive.Disposables;
-using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using KaraokePlayer.Models;
 using KaraokePlayer.Services;
-using ReactiveUI;
 
 namespace KaraokePlayer.ViewModels;
 
-public class SettingsViewModel : ViewModelBase, IDisposable
+public partial class SettingsViewModel : ViewModelBase, IDisposable
 {
     private readonly ISettingsManager _settingsManager;
     private readonly IMediaPlayerController? _mediaPlayerController;
     private readonly Window? _owner;
-    private readonly CompositeDisposable _disposables = new();
     private AppSettings _originalSettings;
     private AppSettings _workingSettings;
     private bool _disposed;
 
     // General Tab
+    [ObservableProperty]
     private string _mediaDirectory = string.Empty;
+    
+    [ObservableProperty]
     private int _displayModeIndex;
+    
+    [ObservableProperty]
     private bool _autoPlayEnabled;
+    
+    [ObservableProperty]
     private bool _shuffleMode;
 
     // Audio Tab
+    [ObservableProperty]
     private double _volumePercent;
+    
+    [ObservableProperty]
     private bool _audioBoostEnabled;
+    
+    [ObservableProperty]
     private string _selectedAudioDevice = "default";
+    
+    [ObservableProperty]
     private bool _crossfadeEnabled;
+    
+    [ObservableProperty]
     private int _crossfadeDuration;
 
     // Display Tab
+    [ObservableProperty]
     private int _themeIndex;
+    
+    [ObservableProperty]
     private int _fontSize;
+    
+    [ObservableProperty]
     private int _visualizationStyleIndex;
 
     // Performance Tab
+    [ObservableProperty]
     private int _preloadBufferSize;
+    
+    [ObservableProperty]
     private int _cacheSize;
 
     // Validation errors
+    [ObservableProperty]
     private string? _mediaDirectoryError;
+    
+    [ObservableProperty]
     private string? _crossfadeDurationError;
+    
+    [ObservableProperty]
     private string? _fontSizeError;
+    
+    [ObservableProperty]
     private string? _preloadBufferSizeError;
+    
+    [ObservableProperty]
     private string? _cacheSizeError;
 
     public SettingsViewModel()
     {
+        // Design-time constructor - initialize all required fields
+        // This ensures that XAML designer doesn't crash on null references
+
+        _settingsManager = new SettingsManager();
+        _mediaPlayerController = null;
+        _owner = null;
+
+        // Initialize with default settings
+        _originalSettings = new AppSettings();
+        _workingSettings = new AppSettings(); // Don't call CloneSettings in design-time
+
+        // Collections are already initialized inline
+        // Add a default audio device for design-time
         try
         {
-            // Design-time constructor - create a mock settings manager
-            _settingsManager = new SettingsManager();
-            _mediaPlayerController = null;
-            _owner = null;
-            
-            // Initialize with default settings
-            _originalSettings = new AppSettings();
-            _workingSettings = new AppSettings(); // Don't call CloneSettings in design-time
-            
-            // Collections are already initialized inline
-            // Add a default audio device for design-time
             AudioDevices.Add("Default Audio Device");
             _selectedAudioDevice = "Default Audio Device";
-            
-            // Initialize default values for properties to avoid null reference exceptions
-            _mediaDirectory = string.Empty;
-            _volumePercent = 100;
-            _crossfadeDuration = 3;
-            _fontSize = 14;
-            _preloadBufferSize = 30;
-            _cacheSize = 500;
         }
         catch
         {
-            // Silently fail in design-time - this prevents XAML designer crashes
-            // The runtime constructor will be used when actually running the app
+            // Ignore collection errors in design-time
         }
+
+        // Initialize default values for properties to avoid null reference exceptions
+        _mediaDirectory = string.Empty;
+        _volumePercent = 100;
+        _crossfadeDuration = 3;
+        _fontSize = 14;
+        _preloadBufferSize = 30;
+        _cacheSize = 500;
+
+        // Commands are auto-generated and available in design-time
     }
 
     public SettingsViewModel(ISettingsManager? settingsManager, IMediaPlayerController? mediaPlayerController, Window? owner)
     {
-        var logPath = Path.Combine(
+        // Ensure Logs directory exists before any file operations
+        var logDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "KaraokePlayer", "Logs", "settings-debug.log");
-        
+            "KaraokePlayer", "Logs");
+        Directory.CreateDirectory(logDir);
+
+        var logPath = Path.Combine(logDir, "settings-debug.log");
+
         try
         {
             File.AppendAllText(logPath, "SettingsViewModel: Constructor called\n");
@@ -125,38 +162,8 @@ public class SettingsViewModel : ViewModelBase, IDisposable
             AudioDevices.Clear();
             KeyboardShortcuts.Clear();
 
-            File.AppendAllText(logPath, "SettingsViewModel: Creating commands...\n");
-            Console.WriteLine("SettingsViewModel: Creating commands...");
-            // Commands
-            File.AppendAllText(logPath, "SettingsViewModel: Creating BrowseMediaDirectoryCommand...\n");
-            BrowseMediaDirectoryCommand = ReactiveCommand.CreateFromTask(BrowseMediaDirectoryAsync);
-            
-            File.AppendAllText(logPath, "SettingsViewModel: Creating TestAudioCommand...\n");
-            TestAudioCommand = ReactiveCommand.Create(TestAudio, 
-                this.WhenAnyValue(x => x.SelectedAudioDevice)
-                    .ObserveOn(RxApp.MainThreadScheduler)
-                    .Select(d => !string.IsNullOrEmpty(d)));
-            
-            File.AppendAllText(logPath, "SettingsViewModel: Creating ResetShortcutCommand...\n");
-            ResetShortcutCommand = ReactiveCommand.Create<KeyboardShortcutItem>(ResetShortcut);
-            
-            File.AppendAllText(logPath, "SettingsViewModel: Creating ResetToDefaultsCommand...\n");
-            ResetToDefaultsCommand = ReactiveCommand.CreateFromTask(ResetToDefaultsAsync);
-            
-            File.AppendAllText(logPath, "SettingsViewModel: Creating OkCommand...\n");
-            OkCommand = ReactiveCommand.CreateFromTask(OkAsync, 
-                this.WhenAnyValue(x => x.HasValidationErrors)
-                    .ObserveOn(RxApp.MainThreadScheduler)
-                    .Select(hasErrors => !hasErrors));
-            
-            File.AppendAllText(logPath, "SettingsViewModel: Creating CancelCommand...\n");
-            CancelCommand = ReactiveCommand.Create(Cancel);
-            
-            File.AppendAllText(logPath, "SettingsViewModel: Creating ApplyCommand...\n");
-            ApplyCommand = ReactiveCommand.CreateFromTask(ApplyAsync, 
-                this.WhenAnyValue(x => x.HasValidationErrors)
-                    .ObserveOn(RxApp.MainThreadScheduler)
-                    .Select(hasErrors => !hasErrors));
+            File.AppendAllText(logPath, "SettingsViewModel: Commands auto-generated...\n");
+            Console.WriteLine("SettingsViewModel: Commands auto-generated...");
 
             File.AppendAllText(logPath, "SettingsViewModel: Setting up validation...\n");
             Console.WriteLine("SettingsViewModel: Setting up validation...");
@@ -181,8 +188,17 @@ public class SettingsViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            File.AppendAllText(logPath, $"SettingsViewModel: EXCEPTION - {ex.Message}\n");
-            File.AppendAllText(logPath, $"SettingsViewModel: Stack trace - {ex.StackTrace}\n");
+            // Try to log the error, but don't fail if logging itself fails
+            try
+            {
+                File.AppendAllText(logPath, $"SettingsViewModel: EXCEPTION - {ex.Message}\n");
+                File.AppendAllText(logPath, $"SettingsViewModel: Stack trace - {ex.StackTrace}\n");
+            }
+            catch
+            {
+                // Ignore logging errors in exception handler - prevent cascading failures
+            }
+
             Console.WriteLine($"SettingsViewModel: ERROR during initialization: {ex.Message}");
             Console.WriteLine($"SettingsViewModel: Stack trace: {ex.StackTrace}");
             throw; // Re-throw to let the caller handle it
@@ -191,135 +207,11 @@ public class SettingsViewModel : ViewModelBase, IDisposable
 
     #region Properties
 
-    // General Tab
-    public string MediaDirectory
-    {
-        get => _mediaDirectory;
-        set => this.RaiseAndSetIfChanged(ref _mediaDirectory, value);
-    }
-
-    public int DisplayModeIndex
-    {
-        get => _displayModeIndex;
-        set => this.RaiseAndSetIfChanged(ref _displayModeIndex, value);
-    }
-
-    public bool AutoPlayEnabled
-    {
-        get => _autoPlayEnabled;
-        set => this.RaiseAndSetIfChanged(ref _autoPlayEnabled, value);
-    }
-
-    public bool ShuffleMode
-    {
-        get => _shuffleMode;
-        set => this.RaiseAndSetIfChanged(ref _shuffleMode, value);
-    }
-
-    // Audio Tab
-    public double VolumePercent
-    {
-        get => _volumePercent;
-        set
-        {
-            // Clamp value between 0 and 100
-            var clampedValue = Math.Max(0, Math.Min(100, value));
-            this.RaiseAndSetIfChanged(ref _volumePercent, clampedValue);
-        }
-    }
-
-    public bool AudioBoostEnabled
-    {
-        get => _audioBoostEnabled;
-        set => this.RaiseAndSetIfChanged(ref _audioBoostEnabled, value);
-    }
-
+    // Observable collections (not auto-generated)
     public ObservableCollection<string> AudioDevices { get; } = new ObservableCollection<string>();
-
-    public string SelectedAudioDevice
-    {
-        get => _selectedAudioDevice;
-        set => this.RaiseAndSetIfChanged(ref _selectedAudioDevice, value);
-    }
-
-    public bool CrossfadeEnabled
-    {
-        get => _crossfadeEnabled;
-        set => this.RaiseAndSetIfChanged(ref _crossfadeEnabled, value);
-    }
-
-    public int CrossfadeDuration
-    {
-        get => _crossfadeDuration;
-        set => this.RaiseAndSetIfChanged(ref _crossfadeDuration, value);
-    }
-
-    // Display Tab
-    public int ThemeIndex
-    {
-        get => _themeIndex;
-        set => this.RaiseAndSetIfChanged(ref _themeIndex, value);
-    }
-
-    public int FontSize
-    {
-        get => _fontSize;
-        set => this.RaiseAndSetIfChanged(ref _fontSize, value);
-    }
-
-    public int VisualizationStyleIndex
-    {
-        get => _visualizationStyleIndex;
-        set => this.RaiseAndSetIfChanged(ref _visualizationStyleIndex, value);
-    }
-
-    // Keyboard Tab
     public ObservableCollection<KeyboardShortcutItem> KeyboardShortcuts { get; } = new ObservableCollection<KeyboardShortcutItem>();
 
-    // Performance Tab
-    public int PreloadBufferSize
-    {
-        get => _preloadBufferSize;
-        set => this.RaiseAndSetIfChanged(ref _preloadBufferSize, value);
-    }
-
-    public int CacheSize
-    {
-        get => _cacheSize;
-        set => this.RaiseAndSetIfChanged(ref _cacheSize, value);
-    }
-
-    // Validation error properties
-    public string? MediaDirectoryError
-    {
-        get => _mediaDirectoryError;
-        private set => this.RaiseAndSetIfChanged(ref _mediaDirectoryError, value);
-    }
-
-    public string? CrossfadeDurationError
-    {
-        get => _crossfadeDurationError;
-        private set => this.RaiseAndSetIfChanged(ref _crossfadeDurationError, value);
-    }
-
-    public string? FontSizeError
-    {
-        get => _fontSizeError;
-        private set => this.RaiseAndSetIfChanged(ref _fontSizeError, value);
-    }
-
-    public string? PreloadBufferSizeError
-    {
-        get => _preloadBufferSizeError;
-        private set => this.RaiseAndSetIfChanged(ref _preloadBufferSizeError, value);
-    }
-
-    public string? CacheSizeError
-    {
-        get => _cacheSizeError;
-        private set => this.RaiseAndSetIfChanged(ref _cacheSizeError, value);
-    }
-
+    // Computed property
     public bool HasValidationErrors =>
         !string.IsNullOrEmpty(MediaDirectoryError) ||
         !string.IsNullOrEmpty(CrossfadeDurationError) ||
@@ -327,23 +219,26 @@ public class SettingsViewModel : ViewModelBase, IDisposable
         !string.IsNullOrEmpty(PreloadBufferSizeError) ||
         !string.IsNullOrEmpty(CacheSizeError);
 
+    // Partial methods for property change notifications
+    // Note: Volume clamping removed - should be handled by UI validation
+
+    // Validation error change handlers - notify HasValidationErrors
+    partial void OnMediaDirectoryErrorChanged(string? value) => OnPropertyChanged(nameof(HasValidationErrors));
+    partial void OnCrossfadeDurationErrorChanged(string? value) => OnPropertyChanged(nameof(HasValidationErrors));
+    partial void OnFontSizeErrorChanged(string? value) => OnPropertyChanged(nameof(HasValidationErrors));
+    partial void OnPreloadBufferSizeErrorChanged(string? value) => OnPropertyChanged(nameof(HasValidationErrors));
+    partial void OnCacheSizeErrorChanged(string? value) => OnPropertyChanged(nameof(HasValidationErrors));
+
     #endregion
 
     #region Commands
-
-    public ReactiveCommand<Unit, Unit> BrowseMediaDirectoryCommand { get; }
-    public ReactiveCommand<Unit, Unit> TestAudioCommand { get; }
-    public ReactiveCommand<KeyboardShortcutItem, Unit> ResetShortcutCommand { get; }
-    public ReactiveCommand<Unit, Unit> ResetToDefaultsCommand { get; }
-    public ReactiveCommand<Unit, Unit> OkCommand { get; }
-    public ReactiveCommand<Unit, Unit> CancelCommand { get; }
-    public ReactiveCommand<Unit, Unit> ApplyCommand { get; }
-
+    // Commands are auto-generated via RelayCommand attributes
     #endregion
 
     #region Command Implementations
 
-    private async Task BrowseMediaDirectoryAsync()
+    [RelayCommand]
+    private async Task BrowseMediaDirectory()
     {
         if (_owner == null) return;
 
@@ -362,13 +257,18 @@ public class SettingsViewModel : ViewModelBase, IDisposable
         }
     }
 
+    [RelayCommand]
     private void TestAudio()
     {
+        if (string.IsNullOrEmpty(SelectedAudioDevice))
+            return;
+
         // TODO: Implement test audio functionality
         // This would play a short test tone through the selected audio device
         Console.WriteLine($"Testing audio on device: {SelectedAudioDevice}");
     }
 
+    [RelayCommand]
     private void ResetShortcut(KeyboardShortcutItem item)
     {
         if (item != null)
@@ -377,7 +277,8 @@ public class SettingsViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private async Task ResetToDefaultsAsync()
+    [RelayCommand]
+    private async Task ResetToDefaults()
     {
         // Use SettingsManager to get defaults
         await _settingsManager.ResetToDefaultsAsync();
@@ -397,12 +298,14 @@ public class SettingsViewModel : ViewModelBase, IDisposable
         ClearValidationErrors();
     }
 
-    private async Task OkAsync()
+    [RelayCommand]
+    private async Task Ok()
     {
-        await ApplyAsync();
+        await Apply();
         CloseWindow();
     }
 
+    [RelayCommand]
     private void Cancel()
     {
         // Revert to original settings (discard working copy)
@@ -414,7 +317,8 @@ public class SettingsViewModel : ViewModelBase, IDisposable
         CloseWindow();
     }
 
-    private async Task ApplyAsync()
+    [RelayCommand]
+    private async Task Apply()
     {
         try
         {
@@ -455,16 +359,8 @@ public class SettingsViewModel : ViewModelBase, IDisposable
 
     private void SetupValidation()
     {
-        // Validate on property changes and dispose subscription when ViewModel is disposed
-        var subscription = this.WhenAnyValue(
-            x => x.MediaDirectoryError,
-            x => x.CrossfadeDurationError,
-            x => x.FontSizeError,
-            x => x.PreloadBufferSizeError,
-            x => x.CacheSizeError)
-            .Subscribe(_ => this.RaisePropertyChanged(nameof(HasValidationErrors)));
-        
-        _disposables.Add(subscription);
+        // Validation is now handled via partial OnChanged methods
+        // No subscriptions needed - validation errors automatically notify HasValidationErrors
     }
 
     private void ClearValidationErrors()
@@ -767,21 +663,10 @@ public class SettingsViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
         if (_disposed)
             return;
 
-        if (disposing)
-        {
-            // Dispose managed resources
-            _disposables?.Dispose();
-        }
-
+        // No disposables needed after ReactiveUI migration
         _disposed = true;
     }
 
@@ -791,27 +676,14 @@ public class SettingsViewModel : ViewModelBase, IDisposable
 /// <summary>
 /// Represents a keyboard shortcut configuration item
 /// </summary>
-public class KeyboardShortcutItem : ReactiveObject
+public partial class KeyboardShortcutItem : CommunityToolkit.Mvvm.ComponentModel.ObservableObject
 {
+    [ObservableProperty]
     private string _action = string.Empty;
+    
+    [ObservableProperty]
     private string _shortcut = string.Empty;
+    
+    [ObservableProperty]
     private string _defaultShortcut = string.Empty;
-
-    public string Action
-    {
-        get => _action;
-        set => this.RaiseAndSetIfChanged(ref _action, value);
-    }
-
-    public string Shortcut
-    {
-        get => _shortcut;
-        set => this.RaiseAndSetIfChanged(ref _shortcut, value);
-    }
-
-    public string DefaultShortcut
-    {
-        get => _defaultShortcut;
-        set => this.RaiseAndSetIfChanged(ref _defaultShortcut, value);
-    }
 }

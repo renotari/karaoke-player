@@ -16,14 +16,9 @@ public static class MetadataExtractorTest
     {
         Console.WriteLine("=== Metadata Extractor Tests ===\n");
 
-        // Create SQLite in-memory database for testing
-        var options = new DbContextOptionsBuilder<KaraokeDbContext>()
-            .UseSqlite("DataSource=:memory:")
-            .Options;
-
-        using var dbContext = new KaraokeDbContext(options);
-        await dbContext.Database.EnsureCreatedAsync();
-        var extractor = new MetadataExtractor(dbContext);
+        // Create test factory for in-memory database
+        var factory = new TestDbContextFactory();
+        var extractor = new MetadataExtractor(factory);
 
         // Test 1: Filename parsing - Pattern "Artist - Title"
         Console.WriteLine("Test 1: Filename parsing - 'Artist - Title' pattern");
@@ -118,8 +113,11 @@ public static class MetadataExtractorTest
 
         try
         {
-            await dbContext.MediaFiles.AddAsync(testMediaFile);
-            await dbContext.SaveChangesAsync();
+            using (var context = factory.CreateDbContext())
+            {
+                await context.MediaFiles.AddAsync(testMediaFile);
+                await context.SaveChangesAsync();
+            }
 
             bool extractedEventFired = false;
             bool failedEventFired = false;

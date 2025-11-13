@@ -151,16 +151,11 @@ public class LazyThumbnailLoader : IDisposable
 
         _disposed = true;
         _cancellationTokenSource.Cancel();
+
+        // Don't block waiting for task - let it complete naturally
+        // The cancellation token will signal it to stop processing
+
         _semaphore.Dispose();
         _cancellationTokenSource.Dispose();
-
-        try
-        {
-            _processingTask.Wait(TimeSpan.FromSeconds(5));
-        }
-        catch
-        {
-            // Ignore timeout
-        }
     }
 }

@@ -1,39 +1,74 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
-using ReactiveUI;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using ReactiveUI; // Keep for throttled search and RxApp.MainThreadScheduler
 using KaraokePlayer.Models;
 using KaraokePlayer.Services;
 
 namespace KaraokePlayer.ViewModels;
 
-public partial class MainWindowViewModel : ViewModelBase
+public partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private readonly ISearchEngine? _searchEngine;
     private readonly IPlaylistManager? _playlistManager;
     private readonly IMediaPlayerController? _mediaPlayerController;
     private readonly IMediaLibraryManager? _mediaLibraryManager;
     private readonly INotificationService? _notificationService;
+    private readonly CompositeDisposable _disposables = new();
 
+    [ObservableProperty]
     private string _searchQuery = string.Empty;
+    
+    [ObservableProperty]
     private MediaFile? _selectedMediaFile;
+    
+    [ObservableProperty]
     private PlaylistItemViewModel? _selectedPlaylistItem;
+    
+    [ObservableProperty]
     private bool _isPlaying;
+    
+    [ObservableProperty]
     private MediaFile? _currentSong;
+    
+    [ObservableProperty]
     private double _currentTime;
+    
+    [ObservableProperty]
     private double _duration;
+    
+    [ObservableProperty]
     private int _volume = 75;
+    
+    [ObservableProperty]
     private string _currentSongInfo = "No song playing";
+    
+    [ObservableProperty]
     private string _statusMessage = "Ready";
+    
+    [ObservableProperty]
     private bool _shuffleEnabled;
+    
+    [ObservableProperty]
     private bool _crossfadeEnabled;
+    
+    [ObservableProperty]
     private int _mediaLibraryCount;
+    
+    [ObservableProperty]
     private bool _isVideoMode;
+    
+    [ObservableProperty]
     private bool _isControlHandleExpanded;
+    
+    [ObservableProperty]
     private string _videoModeSearchQuery = string.Empty;
+    
     private System.Timers.Timer? _handleCollapseTimer;
 
     // Design-time constructor for XAML preview
@@ -44,13 +79,14 @@ public partial class MainWindowViewModel : ViewModelBase
         FilteredMediaFiles = new ObservableCollection<MediaFile>();
         CurrentPlaylist = new ObservableCollection<PlaylistItemViewModel>();
 
-        // Setup reactive property for search filtering
-        this.WhenAnyValue(x => x.SearchQuery)
+        // Setup reactive property for throttled search (KEEP ReactiveUI for this)
+        var throttledSearch = this.WhenAnyValue(x => x.SearchQuery)
             .Throttle(TimeSpan.FromMilliseconds(300))
             .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(async query => await PerformSearchAsync(query));
+            .Subscribe(async query => await Search(query));
+        _disposables.Add(throttledSearch);
 
-        // Initialize commands
+        // Initialize commands (auto-generated)
         InitializeCommands();
 
         // Load sample data for design-time preview
@@ -76,13 +112,14 @@ public partial class MainWindowViewModel : ViewModelBase
         FilteredMediaFiles = new ObservableCollection<MediaFile>();
         CurrentPlaylist = new ObservableCollection<PlaylistItemViewModel>();
 
-        // Setup reactive property for search filtering
-        this.WhenAnyValue(x => x.SearchQuery)
+        // Setup reactive property for throttled search (KEEP ReactiveUI for this)
+        var throttledSearch = this.WhenAnyValue(x => x.SearchQuery)
             .Throttle(TimeSpan.FromMilliseconds(300))
             .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(async query => await PerformSearchAsync(query));
+            .Subscribe(async query => await Search(query));
+        _disposables.Add(throttledSearch);
 
-        // Initialize commands
+        // Initialize commands (auto-generated)
         InitializeCommands();
 
         // Subscribe to service events
@@ -94,49 +131,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void InitializeCommands()
     {
-        // Search commands
-        ClearSearchCommand = ReactiveCommand.Create(ClearSearch);
-        SearchCommand = ReactiveCommand.CreateFromTask<string>(async query => await PerformSearchAsync(query));
-
-        // Playlist commands
-        AddToPlaylistNextCommand = ReactiveCommand.CreateFromTask<MediaFile>(async file => await AddToPlaylistAsync(file, "next"));
-        AddToPlaylistEndCommand = ReactiveCommand.CreateFromTask<MediaFile>(async file => await AddToPlaylistAsync(file, "end"));
-        RemoveSongCommand = ReactiveCommand.CreateFromTask<PlaylistItemViewModel>(RemoveSongAsync);
+        // Commands are auto-generated via RelayCommand attributes
         
-        // Commands with observable conditions
-        var canClearPlaylist = this.WhenAnyValue(
-            x => x.CurrentPlaylist.Count,
-            count => count > 0);
-        ClearPlaylistCommand = ReactiveCommand.CreateFromTask(ClearPlaylistAsync, canClearPlaylist);
-        
-        var canShufflePlaylist = this.WhenAnyValue(
-            x => x.CurrentPlaylist.Count,
-            count => count > 1);
-        ShufflePlaylistCommand = ReactiveCommand.CreateFromTask(ShufflePlaylistAsync, canShufflePlaylist);
-
-        // Playback commands
-        var canPlay = this.WhenAnyValue(
-            x => x.CurrentPlaylist.Count,
-            count => count > 0);
-        PlayCommand = ReactiveCommand.CreateFromTask(PlayAsync, canPlay);
-        PauseCommand = ReactiveCommand.Create(Pause);
-        PlayPauseCommand = ReactiveCommand.Create(PlayPause);
-        StopCommand = ReactiveCommand.Create(Stop);
-        NextCommand = ReactiveCommand.Create(Next);
-        PreviousCommand = ReactiveCommand.Create(Previous);
-
-        // Video Mode commands
-        ToggleVideoModeCommand = ReactiveCommand.Create(ToggleVideoMode);
-        ExpandControlHandleCommand = ReactiveCommand.Create(ExpandControlHandle);
-        CollapseControlHandleCommand = ReactiveCommand.Create(CollapseControlHandle);
-        AddToPlaylistFromVideoModeCommand = ReactiveCommand.CreateFromTask<MediaFile>(async file => await AddToPlaylistAsync(file, "next"));
-
-        // Menu commands
-        OpenMediaDirectoryCommand = ReactiveCommand.CreateFromTask(OpenMediaDirectoryAsync);
-        OpenSettingsCommand = ReactiveCommand.Create(OpenSettings);
-        ShowAboutCommand = ReactiveCommand.Create(ShowAbout);
-        ExitCommand = ReactiveCommand.Create(Exit);
-
         // Initialize collapse timer
         _handleCollapseTimer = new System.Timers.Timer(3000); // 3 seconds
         _handleCollapseTimer.Elapsed += (s, e) => CollapseControlHandle();
@@ -197,109 +193,15 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    // Properties
-    public string SearchQuery
+    // Partial methods for properties with additional logic
+    partial void OnCurrentSongChanged(MediaFile? value)
     {
-        get => _searchQuery;
-        set => this.RaiseAndSetIfChanged(ref _searchQuery, value);
+        UpdateCurrentSongInfo();
     }
 
-    public MediaFile? SelectedMediaFile
+    partial void OnVolumeChanged(int value)
     {
-        get => _selectedMediaFile;
-        set => this.RaiseAndSetIfChanged(ref _selectedMediaFile, value);
-    }
-
-    public PlaylistItemViewModel? SelectedPlaylistItem
-    {
-        get => _selectedPlaylistItem;
-        set => this.RaiseAndSetIfChanged(ref _selectedPlaylistItem, value);
-    }
-
-    public bool IsPlaying
-    {
-        get => _isPlaying;
-        set => this.RaiseAndSetIfChanged(ref _isPlaying, value);
-    }
-
-    public MediaFile? CurrentSong
-    {
-        get => _currentSong;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _currentSong, value);
-            UpdateCurrentSongInfo();
-        }
-    }
-
-    public double CurrentTime
-    {
-        get => _currentTime;
-        set => this.RaiseAndSetIfChanged(ref _currentTime, value);
-    }
-
-    public double Duration
-    {
-        get => _duration;
-        set => this.RaiseAndSetIfChanged(ref _duration, value);
-    }
-
-    public int Volume
-    {
-        get => _volume;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _volume, value);
-            _mediaPlayerController?.SetVolume(value / 100f);
-        }
-    }
-
-    public string CurrentSongInfo
-    {
-        get => _currentSongInfo;
-        set => this.RaiseAndSetIfChanged(ref _currentSongInfo, value);
-    }
-
-    public string StatusMessage
-    {
-        get => _statusMessage;
-        set => this.RaiseAndSetIfChanged(ref _statusMessage, value);
-    }
-
-    public bool ShuffleEnabled
-    {
-        get => _shuffleEnabled;
-        set => this.RaiseAndSetIfChanged(ref _shuffleEnabled, value);
-    }
-
-    public bool CrossfadeEnabled
-    {
-        get => _crossfadeEnabled;
-        set => this.RaiseAndSetIfChanged(ref _crossfadeEnabled, value);
-    }
-
-    public int MediaLibraryCount
-    {
-        get => _mediaLibraryCount;
-        set => this.RaiseAndSetIfChanged(ref _mediaLibraryCount, value);
-    }
-
-    public bool IsVideoMode
-    {
-        get => _isVideoMode;
-        set => this.RaiseAndSetIfChanged(ref _isVideoMode, value);
-    }
-
-    public bool IsControlHandleExpanded
-    {
-        get => _isControlHandleExpanded;
-        set => this.RaiseAndSetIfChanged(ref _isControlHandleExpanded, value);
-    }
-
-    public string VideoModeSearchQuery
-    {
-        get => _videoModeSearchQuery;
-        set => this.RaiseAndSetIfChanged(ref _videoModeSearchQuery, value);
+        _mediaPlayerController?.SetVolume(value / 100f);
     }
 
     // Collections
@@ -311,35 +213,17 @@ public partial class MainWindowViewModel : ViewModelBase
     public INotificationService? NotificationService => _notificationService;
 
     // Commands
-    public ReactiveCommand<Unit, Unit> ClearSearchCommand { get; private set; } = null!;
-    public ReactiveCommand<string, Unit> SearchCommand { get; private set; } = null!;
-    public ReactiveCommand<MediaFile, Unit> AddToPlaylistNextCommand { get; private set; } = null!;
-    public ReactiveCommand<MediaFile, Unit> AddToPlaylistEndCommand { get; private set; } = null!;
-    public ReactiveCommand<PlaylistItemViewModel, Unit> RemoveSongCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> ClearPlaylistCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> ShufflePlaylistCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> PlayCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> PauseCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> PlayPauseCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> StopCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> NextCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> PreviousCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> ToggleVideoModeCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> ExpandControlHandleCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CollapseControlHandleCommand { get; private set; } = null!;
-    public ReactiveCommand<MediaFile, Unit> AddToPlaylistFromVideoModeCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> OpenMediaDirectoryCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> ShowAboutCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> ExitCommand { get; private set; } = null!;
+    // Commands are auto-generated via RelayCommand attributes
 
     // Command implementations
+    [RelayCommand]
     private void ClearSearch()
     {
         SearchQuery = string.Empty;
     }
 
-    private async Task PerformSearchAsync(string? query)
+    [RelayCommand]
+    private async Task Search(string? query)
     {
         try
         {
@@ -400,7 +284,8 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task AddToPlaylistAsync(MediaFile mediaFile, string position)
+    // Note: No [RelayCommand] - called by wrapper commands (AddToPlaylistNext, etc.)
+    private async Task AddToPlaylist(MediaFile mediaFile, string position)
     {
         try
         {
@@ -463,7 +348,17 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task RemoveSongAsync(PlaylistItemViewModel item)
+    [RelayCommand]
+    private async Task AddToPlaylistNext(MediaFile file) => await AddToPlaylist(file, "next");
+
+    [RelayCommand]
+    private async Task AddToPlaylistEnd(MediaFile file) => await AddToPlaylist(file, "end");
+
+    [RelayCommand]
+    private async Task AddToPlaylistFromVideoMode(MediaFile file) => await AddToPlaylist(file, "next");
+
+    [RelayCommand]
+    private async Task RemoveSong(PlaylistItemViewModel item)
     {
         try
         {
@@ -488,7 +383,13 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task ClearPlaylistAsync()
+    // CanExecute methods for commands
+    private bool CanClearPlaylist() => CurrentPlaylist.Count > 0;
+    private bool CanShufflePlaylist() => CurrentPlaylist.Count > 1;
+    private bool CanPlay() => CurrentPlaylist.Count > 0;
+
+    [RelayCommand(CanExecute = nameof(CanClearPlaylist))]
+    private async Task ClearPlaylist()
     {
         try
         {
@@ -509,7 +410,8 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task ShufflePlaylistAsync()
+    [RelayCommand(CanExecute = nameof(CanShufflePlaylist))]
+    private async Task ShufflePlaylist()
     {
         try
         {
@@ -539,7 +441,8 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task PlayAsync()
+    [RelayCommand(CanExecute = nameof(CanPlay))]
+    private async Task Play()
     {
         try
         {
@@ -563,6 +466,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
     private void Pause()
     {
         try
@@ -589,6 +493,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
     private void PlayPause()
     {
         if (IsPlaying)
@@ -597,10 +502,11 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         else
         {
-            _ = PlayAsync();
+            _ = Play();
         }
     }
 
+    [RelayCommand]
     private void Stop()
     {
         try
@@ -624,6 +530,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
     private void Next()
     {
         try
@@ -651,6 +558,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
     private void Previous()
     {
         try
@@ -796,6 +704,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
     private void ToggleVideoMode()
     {
         IsVideoMode = !IsVideoMode;
@@ -810,6 +719,7 @@ public partial class MainWindowViewModel : ViewModelBase
         StatusMessage = IsVideoMode ? "Video Mode enabled" : "Normal Mode enabled";
     }
 
+    [RelayCommand]
     private void ExpandControlHandle()
     {
         if (!IsVideoMode) return;
@@ -821,6 +731,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _handleCollapseTimer?.Start();
     }
 
+    [RelayCommand]
     private void CollapseControlHandle()
     {
         if (!IsVideoMode) return;
@@ -924,7 +835,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (SelectedMediaFile != null)
         {
-            _ = AddToPlaylistAsync(SelectedMediaFile, "end");
+            _ = AddToPlaylist(SelectedMediaFile, "end");
         }
     }
 
@@ -932,7 +843,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (SelectedMediaFile != null)
         {
-            _ = AddToPlaylistAsync(SelectedMediaFile, "next");
+            _ = AddToPlaylist(SelectedMediaFile, "next");
         }
     }
 
@@ -940,7 +851,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (SelectedPlaylistItem != null)
         {
-            _ = RemoveSongAsync(SelectedPlaylistItem);
+            _ = RemoveSong(SelectedPlaylistItem);
         }
     }
 
@@ -951,22 +862,35 @@ public partial class MainWindowViewModel : ViewModelBase
         StatusMessage = "Search focused";
     }
 
-    public async void OpenPlaylistComposer()
+    public void OpenPlaylistComposer()
     {
         // This will open the playlist composer window
         StatusMessage = "Opening Playlist Composer...";
-        
+
         // Use ReactiveUI MessageBus to request window opening
         ReactiveUI.MessageBus.Current.SendMessage(new OpenPlaylistComposerMessage());
     }
 
-    public async void OpenSettings()
+    [RelayCommand]
+    public void OpenSettings()
     {
-        // This will open the settings window
-        StatusMessage = "Opening Settings...";
-        
-        // Use ReactiveUI MessageBus to request window opening
-        ReactiveUI.MessageBus.Current.SendMessage(new Services.OpenSettingsMessage());
+        try
+        {
+            Console.WriteLine($"[DEBUG] OpenSettings called - Thread: {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+
+            // This will open the settings window
+            StatusMessage = "Opening Settings...";
+            Console.WriteLine("[DEBUG] About to send OpenSettingsMessage");
+
+            // Use ReactiveUI MessageBus to request window opening
+            ReactiveUI.MessageBus.Current.SendMessage(new Services.OpenSettingsMessage());
+            Console.WriteLine("[DEBUG] OpenSettingsMessage sent successfully");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DEBUG] Exception in OpenSettings: {ex.Message}");
+            Console.WriteLine($"[DEBUG] Stack trace: {ex.StackTrace}");
+        }
     }
 
     public void RefreshLibrary()
@@ -992,27 +916,25 @@ public partial class MainWindowViewModel : ViewModelBase
         StatusMessage = "Dialog closed";
     }
 
-    public async Task OpenMediaDirectoryAsync()
+    [RelayCommand]
+    public async Task OpenMediaDirectory()
     {
         // Use ReactiveUI MessageBus to request folder picker
         ReactiveUI.MessageBus.Current.SendMessage(new OpenMediaDirectoryMessage());
     }
 
+    [RelayCommand]
     public void ShowAbout()
     {
         // Use ReactiveUI MessageBus to request about dialog
         ReactiveUI.MessageBus.Current.SendMessage(new ShowAboutMessage());
     }
 
+    [RelayCommand]
     public void Exit()
     {
         // Use ReactiveUI MessageBus to request application exit
         ReactiveUI.MessageBus.Current.SendMessage(new ExitApplicationMessage());
-    }
-
-    public void Dispose()
-    {
-        _handleCollapseTimer?.Dispose();
     }
 
     /// <summary>
@@ -1021,6 +943,12 @@ public partial class MainWindowViewModel : ViewModelBase
     public IPlaylistManager? GetPlaylistManager()
     {
         return _playlistManager;
+    }
+
+    public void Dispose()
+    {
+        _disposables.Dispose();
+        _handleCollapseTimer?.Dispose();
     }
 }
 

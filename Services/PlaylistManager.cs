@@ -17,7 +17,7 @@ namespace KaraokePlayer.Services;
 /// </summary>
 public class PlaylistManager : IPlaylistManager
 {
-    private readonly KaraokeDbContext _dbContext;
+    private readonly IDbContextFactory _dbContextFactory;
     private readonly string _autoSaveFilePath;
     private readonly ObservableCollection<PlaylistItem> _currentPlaylist;
     private Timer? _autoSaveTimer;
@@ -28,9 +28,9 @@ public class PlaylistManager : IPlaylistManager
 
     public event EventHandler<PlaylistChangedEventArgs>? PlaylistChanged;
 
-    public PlaylistManager(KaraokeDbContext dbContext)
+    public PlaylistManager(IDbContextFactory dbContextFactory)
     {
-        _dbContext = dbContext;
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         
         // Set up auto-save file path in user data directory
         var userDataPath = Path.Combine(
@@ -244,10 +244,12 @@ public class PlaylistManager : IPlaylistManager
         // Clear current playlist
         _currentPlaylist.Clear();
 
+        using var context = _dbContextFactory.CreateDbContext();
+
         // Load media files from database
         foreach (var path in filePaths)
         {
-            var mediaFile = await _dbContext.MediaFiles
+            var mediaFile = await context.MediaFiles
                 .Include(m => m.Metadata)
                 .FirstOrDefaultAsync(m => m.FilePath == path);
 
@@ -306,9 +308,11 @@ public class PlaylistManager : IPlaylistManager
 
             _currentPlaylist.Clear();
 
+            using var context = _dbContextFactory.CreateDbContext();
+
             foreach (var savedItem in savedData.Items)
             {
-                var mediaFile = await _dbContext.MediaFiles
+                var mediaFile = await context.MediaFiles
                     .Include(m => m.Metadata)
                     .FirstOrDefaultAsync(m => m.Id == savedItem.MediaFileId);
 

@@ -34,7 +34,16 @@ public class CacheManagerTest
             // Cleanup
             if (Directory.Exists(tempDir))
             {
-                Directory.Delete(tempDir, true);
+                try
+                {
+                    // Wait a moment for database connections to fully close
+                    await Task.Delay(100);
+                    Directory.Delete(tempDir, true);
+                }
+                catch
+                {
+                    // Ignore cleanup errors (file might be locked by SQLite)
+                }
             }
         }
     }
@@ -139,13 +148,13 @@ public class CacheManagerTest
     {
         Console.WriteLine("Test: LRU Eviction Policy");
 
-        // Create cache with small size limit (1KB = 0.001 MB, but constructor takes long)
-        using var cache = new CacheManager(cacheDir, maxThumbnailCacheSizeMB: 1);
+        // Create cache with 2MB size limit (strings are UTF-16, so 400K chars = 800KB estimated)
+        using var cache = new CacheManager(cacheDir, maxThumbnailCacheSizeMB: 2);
 
-        // Add thumbnails that exceed the limit (need larger data for 1MB limit)
-        var largeData1 = new string('A', 400000); // ~400KB
-        var largeData2 = new string('B', 400000); // ~400KB
-        var largeData3 = new string('C', 400000); // ~400KB
+        // Add thumbnails that exceed the limit
+        var largeData1 = new string('A', 400000); // 800KB estimated (400K chars × 2 bytes/char)
+        var largeData2 = new string('B', 400000); // 800KB estimated
+        var largeData3 = new string('C', 400000); // 800KB estimated
 
         cache.Set("thumb1", largeData1, CacheCategory.Thumbnail);
         cache.Set("thumb2", largeData2, CacheCategory.Thumbnail);
@@ -274,14 +283,8 @@ public class CacheManagerTest
     {
         Console.WriteLine("Test: Media Library Integration");
 
-        var dbPath = Path.Combine(cacheDir, "test.db");
-        var optionsBuilder = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<KaraokeDbContext>();
-        optionsBuilder.UseSqlite($"Data Source={dbPath}");
-        
-        using var dbContext = new KaraokeDbContext(optionsBuilder.Options);
-        await dbContext.Database.EnsureCreatedAsync();
-
-        using var mediaLibrary = new MediaLibraryManager(dbContext);
+        var factory = new TestDbContextFactory();
+        using var mediaLibrary = new MediaLibraryManager(factory);
         using var cache = new CacheManager(cacheDir);
 
         // Subscribe to media library events

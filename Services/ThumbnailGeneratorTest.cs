@@ -21,14 +21,9 @@ public static class ThumbnailGeneratorTest
         Core.Initialize();
         using var libVLC = new LibVLC();
 
-        // Create SQLite in-memory database for testing
-        var options = new DbContextOptionsBuilder<KaraokeDbContext>()
-            .UseSqlite("DataSource=:memory:")
-            .Options;
-
-        using var dbContext = new KaraokeDbContext(options);
-        await dbContext.Database.EnsureCreatedAsync();
-        var generator = new ThumbnailGenerator(dbContext, libVLC);
+        // Create test factory for in-memory database
+        var factory = new TestDbContextFactory();
+        var generator = new ThumbnailGenerator(factory, libVLC);
 
         // Test 1: Cache directory creation
         Console.WriteLine("Test 1: Cache directory creation");
@@ -102,8 +97,11 @@ public static class ThumbnailGeneratorTest
 
         try
         {
-            await dbContext.MediaFiles.AddAsync(testMediaFile);
-            await dbContext.SaveChangesAsync();
+            using (var context = factory.CreateDbContext())
+            {
+                await context.MediaFiles.AddAsync(testMediaFile);
+                await context.SaveChangesAsync();
+            }
 
             bool generatedEventFired = false;
             bool failedEventFired = false;
@@ -149,11 +147,14 @@ public static class ThumbnailGeneratorTest
             }
 
             // Check if database was updated
-            var updatedFile = await dbContext.MediaFiles.FindAsync(testMediaFile.Id);
-            if (updatedFile != null && updatedFile.ThumbnailLoaded)
+            using (var context = factory.CreateDbContext())
             {
-                Console.WriteLine($"  ✓ Database updated: ThumbnailLoaded={updatedFile.ThumbnailLoaded}");
-                Console.WriteLine($"    ThumbnailPath: {updatedFile.ThumbnailPath}");
+                var updatedFile = await context.MediaFiles.FindAsync(testMediaFile.Id);
+                if (updatedFile != null && updatedFile.ThumbnailLoaded)
+                {
+                    Console.WriteLine($"  ✓ Database updated: ThumbnailLoaded={updatedFile.ThumbnailLoaded}");
+                    Console.WriteLine($"    ThumbnailPath: {updatedFile.ThumbnailPath}");
+                }
             }
         }
         finally

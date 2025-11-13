@@ -7,6 +7,7 @@ using Avalonia.Input;
 using System;
 using System.IO;
 using System.Linq;
+using System.Reactive;
 using System.Threading.Tasks;
 using Avalonia.Markup.Xaml;
 using KaraokePlayer.Models;
@@ -15,12 +16,13 @@ using KaraokePlayer.ViewModels;
 using KaraokePlayer.Views;
 using LibVLCSharp.Shared;
 using Microsoft.EntityFrameworkCore;
+using ReactiveUI;
 
 namespace KaraokePlayer;
 
 public partial class App : Application
 {
-    private KaraokeDbContext? _dbContext;
+    private IDbContextFactory? _dbContextFactory;
     private ISearchEngine? _searchEngine;
     private IPlaylistManager? _playlistManager;
     private IMediaPlayerController? _mediaPlayerController;
@@ -53,9 +55,27 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
+            // Avoid duplicate validations from both Avalonia and the CommunityToolkit.
             // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
+
+            // Set up global exception handler for ReactiveUI
+            // This catches exceptions that occur in reactive code (MessageBus, WhenAnyValue, etc.)
+            RxApp.DefaultExceptionHandler = Observer.Create<Exception>(ex =>
+            {
+                Console.WriteLine($"[ReactiveUI] Unhandled exception: {ex.Message}");
+                Console.WriteLine($"[ReactiveUI] Exception type: {ex.GetType().Name}");
+                Console.WriteLine($"[ReactiveUI] Stack trace: {ex.StackTrace}");
+
+                // Log to file if logging service is available
+                _loggingService?.LogError("Unhandled exception in reactive code", ex);
+
+                // Show error to user via notification service if available
+                _notificationService?.ShowError(
+                    "Application Error",
+                    $"An unexpected error occurred: {ex.Message}"
+                );
+            });
 
             // Initialize services
             InitializeServices();
@@ -122,50 +142,23 @@ public partial class App : Application
                 Cache = Microsoft.Data.Sqlite.SqliteCacheMode.Shared, // Enable shared cache for connection pooling
                 Pooling = true // Enable connection pooling
             }.ToString();
-            
-            var optionsBuilder = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<KaraokeDbContext>();
-            optionsBuilder.UseSqlite(connectionString, options =>
-            {
-                options.CommandTimeout(30);
-            });
 
-            _dbContext = new KaraokeDbContext(optionsBuilder.Options);
-            _dbContext.Database.EnsureCreated();
-            
-            // Enable Write-Ahead Logging (WAL) mode for better concurrency
-            using (var connection = _dbContext.Database.GetDbConnection())
-            {
-                connection.Open();
-                using (var command = connection.CreateCommand())
-                {
-                    command.CommandText = "PRAGMA journal_mode=WAL;";
-                    command.ExecuteNonQuery();
-                    
-                    // Set other performance pragmas
-                    command.CommandText = "PRAGMA synchronous=NORMAL;";
-                    command.ExecuteNonQuery();
-                    
-                    command.CommandText = "PRAGMA cache_size=-64000;"; // 64MB cache
-                    command.ExecuteNonQuery();
-                    
-                    command.CommandText = "PRAGMA temp_store=MEMORY;";
-                    command.ExecuteNonQuery();
-                }
-            }
+            // Create DbContext factory (handles database initialization and optimizations)
+            _dbContextFactory = new DbContextFactory(connectionString);
 
             // Create service instances with logging
             _notificationService = new NotificationService();
             _errorHandlingService = new ErrorHandlingService(_notificationService, _loggingService);
             _settingsManager = new SettingsManager();
-            _searchEngine = new SearchEngine(_dbContext);
-            _playlistManager = new PlaylistManager(_dbContext);
+            _searchEngine = new SearchEngine(_dbContextFactory);
+            _playlistManager = new PlaylistManager(_dbContextFactory);
             _mediaPlayerController = new MediaPlayerController(_loggingService);
-            _mediaLibraryManager = new MediaLibraryManager(_dbContext);
-            _metadataExtractor = new MetadataExtractor(_dbContext);
-            
+            _mediaLibraryManager = new MediaLibraryManager(_dbContextFactory);
+            _metadataExtractor = new MetadataExtractor(_dbContextFactory);
+
             // Create LibVLC instance for thumbnail generator
             var libVLC = new LibVLC();
-            _thumbnailGenerator = new ThumbnailGenerator(_dbContext, libVLC);
+            _thumbnailGenerator = new ThumbnailGenerator(_dbContextFactory, libVLC);
             _keyboardShortcutManager = new KeyboardShortcutManager();
             
             // Initialize cache manager with cache directory
@@ -364,8 +357,8 @@ public partial class App : Application
             generatorDisposable.Dispose();
         }
 
-        _dbContext?.Dispose();
-        
+        // DbContext factory doesn't need disposal - contexts are disposed via using statements
+
         _loggingService?.LogInformation("Application shutdown complete");
     }
 

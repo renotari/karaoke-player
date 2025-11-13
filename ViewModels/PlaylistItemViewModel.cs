@@ -1,5 +1,5 @@
 using System;
-using ReactiveUI;
+using CommunityToolkit.Mvvm.ComponentModel;
 using KaraokePlayer.Models;
 
 namespace KaraokePlayer.ViewModels;
@@ -7,12 +7,22 @@ namespace KaraokePlayer.ViewModels;
 /// <summary>
 /// ViewModel for a playlist item with error handling
 /// </summary>
-public class PlaylistItemViewModel : ViewModelBase
+public partial class PlaylistItemViewModel : ViewModelBase
 {
+    [ObservableProperty]
     private PlaylistItem _playlistItem;
+
+    [ObservableProperty]
     private MediaFile _mediaFile;
+
+    [ObservableProperty]
     private bool _isPlaying;
+
+    [ObservableProperty]
     private MediaError? _error;
+
+    [ObservableProperty]
+    private bool _isCurrentlyPlaying;
 
     public PlaylistItemViewModel(PlaylistItem playlistItem, MediaFile mediaFile)
     {
@@ -20,88 +30,59 @@ public class PlaylistItemViewModel : ViewModelBase
         _mediaFile = mediaFile;
     }
 
-    public PlaylistItem PlaylistItem
+    partial void OnMediaFileChanged(MediaFile value)
     {
-        get => _playlistItem;
-        set => this.RaiseAndSetIfChanged(ref _playlistItem, value);
+        OnPropertyChanged(nameof(DisplayTitle));
+        OnPropertyChanged(nameof(DisplayArtist));
+        OnPropertyChanged(nameof(Duration));
+        OnPropertyChanged(nameof(ThumbnailPath));
     }
 
-    public MediaFile MediaFile
+    partial void OnErrorChanged(MediaError? value)
     {
-        get => _mediaFile;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _mediaFile, value);
-            this.RaisePropertyChanged(nameof(DisplayTitle));
-            this.RaisePropertyChanged(nameof(DisplayArtist));
-            this.RaisePropertyChanged(nameof(Duration));
-            this.RaisePropertyChanged(nameof(ThumbnailPath));
-        }
+        OnPropertyChanged(nameof(HasError));
+        OnPropertyChanged(nameof(ErrorMessage));
+        OnPropertyChanged(nameof(ErrorTooltip));
     }
 
-    public bool IsPlaying
-    {
-        get => _isPlaying;
-        set => this.RaiseAndSetIfChanged(ref _isPlaying, value);
-    }
+    public bool HasError => Error != null || !string.IsNullOrEmpty(PlaylistItem.Error);
 
-    public MediaError? Error
-    {
-        get => _error;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _error, value);
-            this.RaisePropertyChanged(nameof(HasError));
-            this.RaisePropertyChanged(nameof(ErrorMessage));
-            this.RaisePropertyChanged(nameof(ErrorTooltip));
-        }
-    }
-
-    public bool HasError => _error != null || !string.IsNullOrEmpty(_playlistItem.Error);
-
-    public string ErrorMessage => _error?.Message ?? _playlistItem.Error ?? string.Empty;
+    public string ErrorMessage => Error?.Message ?? PlaylistItem.Error ?? string.Empty;
 
     public string ErrorTooltip
     {
         get
         {
-            if (_error == null && string.IsNullOrEmpty(_playlistItem.Error))
+            if (Error == null && string.IsNullOrEmpty(PlaylistItem.Error))
                 return string.Empty;
 
-            var message = _error?.Message ?? _playlistItem.Error ?? string.Empty;
-            var details = _error?.Details;
+            var message = Error?.Message ?? PlaylistItem.Error ?? string.Empty;
+            var details = Error?.Details;
 
             return string.IsNullOrEmpty(details) ? message : $"{message}\n{details}";
         }
     }
 
-    public bool IsDuplicate => _playlistItem.IsDuplicate;
+    public bool IsDuplicate => PlaylistItem.IsDuplicate;
 
-    public string DisplayTitle => _mediaFile.Metadata?.Title ?? _mediaFile.Filename;
+    public string DisplayTitle => MediaFile.Metadata?.Title ?? MediaFile.Filename;
 
-    public string DisplayArtist => _mediaFile.Metadata?.Artist ?? "Unknown Artist";
+    public string DisplayArtist => MediaFile.Metadata?.Artist ?? "Unknown Artist";
 
     public string Duration
     {
         get
         {
-            if (_mediaFile.Metadata?.Duration > 0)
+            if (MediaFile.Metadata?.Duration > 0)
             {
-                var ts = TimeSpan.FromSeconds(_mediaFile.Metadata.Duration);
+                var ts = TimeSpan.FromSeconds(MediaFile.Metadata.Duration);
                 return ts.ToString(@"mm\:ss");
             }
             return "--:--";
         }
     }
 
-    public string? ThumbnailPath => _mediaFile.ThumbnailPath;
+    public string? ThumbnailPath => MediaFile.ThumbnailPath;
 
-    public int Position => _playlistItem.Position;
-
-    private bool _isCurrentlyPlaying;
-    public bool IsCurrentlyPlaying
-    {
-        get => _isCurrentlyPlaying;
-        set => this.RaiseAndSetIfChanged(ref _isCurrentlyPlaying, value);
-    }
+    public int Position => PlaylistItem.Position;
 }

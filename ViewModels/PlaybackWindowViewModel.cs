@@ -1,6 +1,7 @@
 using System;
-using System.Reactive;
-using ReactiveUI;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using ReactiveUI; // Keep for MessageBus
 using KaraokePlayer.Models;
 using KaraokePlayer.Services;
 using LibVLCSharp.Shared;
@@ -8,26 +9,57 @@ using Avalonia.Media.Imaging;
 
 namespace KaraokePlayer.ViewModels;
 
-public class PlaybackWindowViewModel : ViewModelBase
+public partial class PlaybackWindowViewModel : ViewModelBase
 {
     private readonly IMediaPlayerController? _mediaPlayerController;
     private readonly IAudioVisualizationEngine? _audioVisualizationEngine;
     
+    [ObservableProperty]
     private MediaFile? _currentSong;
+    
+    [ObservableProperty]
     private bool _isPlaying;
+    
+    [ObservableProperty]
     private double _currentTime;
+    
+    [ObservableProperty]
     private double _duration;
+    
+    [ObservableProperty]
     private bool _subtitlesEnabled = true;
+    
+    [ObservableProperty]
     private bool _subtitlesVisible;
+    
+    [ObservableProperty]
     private string _currentSubtitle = string.Empty;
+    
+    [ObservableProperty]
     private bool _isFullscreen;
+    
+    [ObservableProperty]
     private bool _isBuffering;
+    
+    [ObservableProperty]
     private bool _hasMedia;
+    
+    [ObservableProperty]
     private bool _isVideoContent;
+    
+    [ObservableProperty]
     private bool _isAudioContent;
+    
+    [ObservableProperty]
     private string _currentTitle = string.Empty;
+    
+    [ObservableProperty]
     private string _currentArtist = string.Empty;
+    
+    [ObservableProperty]
     private Bitmap? _currentArtwork;
+    
+    [ObservableProperty]
     private string _visualizationStyle = "bars";
 
     // Design-time constructor
@@ -51,8 +83,7 @@ public class PlaybackWindowViewModel : ViewModelBase
 
     private void InitializeCommands()
     {
-        ToggleFullscreenCommand = ReactiveCommand.Create(ToggleFullscreen);
-        ToggleSubtitlesCommand = ReactiveCommand.Create(ToggleSubtitles);
+        // Commands are now auto-generated via RelayCommand attributes
     }
 
     private void SubscribeToServiceEvents()
@@ -97,128 +128,34 @@ public class PlaybackWindowViewModel : ViewModelBase
             });
     }
 
-    // Properties
-    public MediaFile? CurrentSong
+    // OnChanged partial methods for properties that need to trigger additional logic
+    partial void OnCurrentSongChanged(MediaFile? value)
     {
-        get => _currentSong;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _currentSong, value);
-            UpdateMediaInfo();
-        }
+        UpdateMediaInfo();
     }
 
-    public bool IsPlaying
+    partial void OnSubtitlesEnabledChanged(bool value)
     {
-        get => _isPlaying;
-        set => this.RaiseAndSetIfChanged(ref _isPlaying, value);
-    }
-
-    public double CurrentTime
-    {
-        get => _currentTime;
-        set => this.RaiseAndSetIfChanged(ref _currentTime, value);
-    }
-
-    public double Duration
-    {
-        get => _duration;
-        set => this.RaiseAndSetIfChanged(ref _duration, value);
-    }
-
-    public bool SubtitlesEnabled
-    {
-        get => _subtitlesEnabled;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _subtitlesEnabled, value);
-            UpdateSubtitlesVisibility();
-        }
-    }
-
-    public bool SubtitlesVisible
-    {
-        get => _subtitlesVisible;
-        set => this.RaiseAndSetIfChanged(ref _subtitlesVisible, value);
-    }
-
-    public string CurrentSubtitle
-    {
-        get => _currentSubtitle;
-        set => this.RaiseAndSetIfChanged(ref _currentSubtitle, value);
-    }
-
-    public bool IsFullscreen
-    {
-        get => _isFullscreen;
-        set => this.RaiseAndSetIfChanged(ref _isFullscreen, value);
-    }
-
-    public bool IsBuffering
-    {
-        get => _isBuffering;
-        set => this.RaiseAndSetIfChanged(ref _isBuffering, value);
-    }
-
-    public bool HasMedia
-    {
-        get => _hasMedia;
-        set => this.RaiseAndSetIfChanged(ref _hasMedia, value);
-    }
-
-    public bool IsVideoContent
-    {
-        get => _isVideoContent;
-        set => this.RaiseAndSetIfChanged(ref _isVideoContent, value);
-    }
-
-    public bool IsAudioContent
-    {
-        get => _isAudioContent;
-        set => this.RaiseAndSetIfChanged(ref _isAudioContent, value);
-    }
-
-    public string CurrentTitle
-    {
-        get => _currentTitle;
-        set => this.RaiseAndSetIfChanged(ref _currentTitle, value);
-    }
-
-    public string CurrentArtist
-    {
-        get => _currentArtist;
-        set => this.RaiseAndSetIfChanged(ref _currentArtist, value);
-    }
-
-    public Bitmap? CurrentArtwork
-    {
-        get => _currentArtwork;
-        set => this.RaiseAndSetIfChanged(ref _currentArtwork, value);
-    }
-
-    public string VisualizationStyle
-    {
-        get => _visualizationStyle;
-        set => this.RaiseAndSetIfChanged(ref _visualizationStyle, value);
+        UpdateSubtitlesVisibility();
     }
 
     public MediaPlayer? MediaPlayer => _mediaPlayerController?.GetActiveMediaPlayer();
 
-    // Commands
-    public ReactiveCommand<Unit, Unit> ToggleFullscreenCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> ToggleSubtitlesCommand { get; private set; } = null!;
+    // Commands (auto-generated by RelayCommand attributes)
 
     // Events
     public event EventHandler<bool>? FullscreenRequested;
     public event EventHandler? VisualizationUpdateRequested;
 
     // Command implementations
+    [RelayCommand]
     private void ToggleFullscreen()
     {
         IsFullscreen = !IsFullscreen;
         FullscreenRequested?.Invoke(this, IsFullscreen);
     }
 
+    [RelayCommand]
     private void ToggleSubtitles()
     {
         SubtitlesEnabled = !SubtitlesEnabled;

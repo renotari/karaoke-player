@@ -23,21 +23,17 @@ public class TestWelcomeDialog
             );
             System.IO.Directory.CreateDirectory(userDataPath);
 
-            var dbPath = System.IO.Path.Combine(userDataPath, "karaoke.db");
-            var optionsBuilder = new DbContextOptionsBuilder<KaraokeDbContext>();
-            optionsBuilder.UseSqlite($"Data Source={dbPath}");
-
-            var dbContext = new KaraokeDbContext(optionsBuilder.Options);
-            dbContext.Database.EnsureCreated();
+            // Create test factory for in-memory database
+            var factory = new TestDbContextFactory();
 
             // Initialize LibVLC
             Core.Initialize();
             var libVLC = new LibVLC();
 
             // Create services
-            var mediaLibraryManager = new MediaLibraryManager(dbContext);
-            var metadataExtractor = new MetadataExtractor(dbContext);
-            var thumbnailGenerator = new ThumbnailGenerator(dbContext, libVLC);
+            var mediaLibraryManager = new MediaLibraryManager(factory);
+            var metadataExtractor = new MetadataExtractor(factory);
+            var thumbnailGenerator = new ThumbnailGenerator(factory, libVLC);
 
             Console.WriteLine("Services created successfully");
 
@@ -52,7 +48,6 @@ public class TestWelcomeDialog
             Console.WriteLine($"Selected directory: {welcomeDialog.SelectedMediaDirectory}");
 
             // Cleanup
-            dbContext.Dispose();
             libVLC.Dispose();
         }
         catch (Exception ex)

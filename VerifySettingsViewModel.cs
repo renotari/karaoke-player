@@ -45,7 +45,7 @@ public static class VerifySettingsViewModel
             Console.WriteLine("✓ Invalid values set without immediate validation errors");
             
             // Try to apply - should trigger validation
-            viewModel.ApplyCommand.Execute().Subscribe();
+            viewModel.ApplyCommand.Execute(null);
             await Task.Delay(100); // Give it time to process
             
             if (viewModel.HasValidationErrors)
@@ -68,7 +68,7 @@ public static class VerifySettingsViewModel
             viewModel.FontSize = 16;
             viewModel.MediaDirectory = "C:\\Music";
             
-            viewModel.ApplyCommand.Execute().Subscribe();
+            viewModel.ApplyCommand.Execute(null);
             await Task.Delay(100);
             
             if (!viewModel.HasValidationErrors)
@@ -106,7 +106,7 @@ public static class VerifySettingsViewModel
             Console.WriteLine("\n--- Testing Cancel Behavior ---");
             var originalVolume = viewModel.VolumePercent;
             viewModel.VolumePercent = 25;
-            viewModel.CancelCommand.Execute().Subscribe();
+            viewModel.CancelCommand.Execute(null);
             // Note: After cancel, window would close. In real usage, settings would be discarded.
             Console.WriteLine("✓ Cancel command executed (working copy discarded)");
 
@@ -116,7 +116,7 @@ public static class VerifySettingsViewModel
             Console.WriteLine("\n--- Testing Apply Command ---");
             viewModel.VolumePercent = 75;
             viewModel.CrossfadeDuration = 7;
-            viewModel.ApplyCommand.Execute().Subscribe();
+            viewModel.ApplyCommand.Execute(null);
             
             var updatedSettings = settingsManager.GetSettings();
             if (Math.Abs(updatedSettings.Volume - 0.75) < 0.01 && updatedSettings.CrossfadeDuration == 7)
@@ -132,7 +132,7 @@ public static class VerifySettingsViewModel
             Console.WriteLine("\n--- Testing Reset to Defaults ---");
             viewModel.VolumePercent = 50;
             viewModel.CrossfadeDuration = 10;
-            viewModel.ResetToDefaultsCommand.Execute().Subscribe();
+            viewModel.ResetToDefaultsCommand.Execute(null);
             
             if (viewModel.VolumePercent == 80 && viewModel.CrossfadeDuration == 3)
             {

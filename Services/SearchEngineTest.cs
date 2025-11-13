@@ -113,9 +113,10 @@ public class SearchEngineTest
 
     public static async Task TestSearchByTitle()
     {
-        using var context = CreateInMemoryContext();
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
         await SeedTestData(context);
-        var searchEngine = new SearchEngine(context);
+        var searchEngine = new SearchEngine(factory);
 
         var results = await searchEngine.SearchAsync("Bohemian");
 
@@ -130,9 +131,10 @@ public class SearchEngineTest
 
     public static async Task TestSearchByArtist()
     {
-        using var context = CreateInMemoryContext();
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
         await SeedTestData(context);
-        var searchEngine = new SearchEngine(context);
+        var searchEngine = new SearchEngine(factory);
 
         var results = await searchEngine.SearchAsync("Queen");
 
@@ -150,9 +152,10 @@ public class SearchEngineTest
 
     public static async Task TestSearchByFilename()
     {
-        using var context = CreateInMemoryContext();
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
         await SeedTestData(context);
-        var searchEngine = new SearchEngine(context);
+        var searchEngine = new SearchEngine(factory);
 
         var results = await searchEngine.SearchAsync("Hotel");
 
@@ -167,9 +170,10 @@ public class SearchEngineTest
 
     public static async Task TestPartialMatching()
     {
-        using var context = CreateInMemoryContext();
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
         await SeedTestData(context);
-        var searchEngine = new SearchEngine(context);
+        var searchEngine = new SearchEngine(factory);
 
         var results = await searchEngine.SearchAsync("heav");
 
@@ -184,9 +188,10 @@ public class SearchEngineTest
 
     public static async Task TestEmptyQuery()
     {
-        using var context = CreateInMemoryContext();
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
         await SeedTestData(context);
-        var searchEngine = new SearchEngine(context);
+        var searchEngine = new SearchEngine(factory);
 
         var results = await searchEngine.SearchAsync("");
 
@@ -198,8 +203,9 @@ public class SearchEngineTest
 
     public static async Task TestSearchHistory()
     {
-        using var context = CreateInMemoryContext();
-        var searchEngine = new SearchEngine(context);
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
+        var searchEngine = new SearchEngine(factory);
 
         await searchEngine.AddToHistoryAsync("Queen");
         await searchEngine.AddToHistoryAsync("Beatles");
@@ -218,8 +224,9 @@ public class SearchEngineTest
 
     public static async Task TestSearchHistoryLimit()
     {
-        using var context = CreateInMemoryContext();
-        var searchEngine = new SearchEngine(context);
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
+        var searchEngine = new SearchEngine(factory);
 
         // Add 12 search terms (limit is 10)
         for (int i = 1; i <= 12; i++)
@@ -244,8 +251,9 @@ public class SearchEngineTest
 
     public static async Task TestSearchHistoryDuplicates()
     {
-        using var context = CreateInMemoryContext();
-        var searchEngine = new SearchEngine(context);
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
+        var searchEngine = new SearchEngine(factory);
 
         await searchEngine.AddToHistoryAsync("Queen");
         await Task.Delay(10);
@@ -266,8 +274,9 @@ public class SearchEngineTest
 
     public static async Task TestClearHistory()
     {
-        using var context = CreateInMemoryContext();
-        var searchEngine = new SearchEngine(context);
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
+        var searchEngine = new SearchEngine(factory);
 
         await searchEngine.AddToHistoryAsync("Queen");
         await searchEngine.AddToHistoryAsync("Beatles");
@@ -284,9 +293,10 @@ public class SearchEngineTest
 
     public static async Task TestRelevanceRanking()
     {
-        using var context = CreateInMemoryContext();
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
         await SeedTestData(context);
-        var searchEngine = new SearchEngine(context);
+        var searchEngine = new SearchEngine(factory);
 
         // Search for "Queen" - should rank exact artist match higher
         var results = await searchEngine.SearchAsync("Queen");
