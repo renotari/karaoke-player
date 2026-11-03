@@ -66,9 +66,10 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         }
     }
 
-    public double CurrentTime => GetActivePlayer().Time / 1000.0;
+    // LibVLC returns -1 when no media is loaded: clamp to 0
+    public double CurrentTime => Math.Max(0, GetActivePlayer().Time) / 1000.0;
 
-    public double Duration => GetActivePlayer().Length / 1000.0;
+    public double Duration => Math.Max(0, GetActivePlayer().Length) / 1000.0;
 
     public float Volume => _volume;
 

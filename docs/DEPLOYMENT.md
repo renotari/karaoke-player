@@ -6,7 +6,7 @@ This guide covers building, packaging, and deploying the Karaoke Player applicat
 
 ### Development Environment
 - Windows 10/11 (64-bit)
-- .NET 8 SDK: https://dotnet.microsoft.com/download/dotnet/8.0
+- .NET 10 SDK: https://dotnet.microsoft.com/download/dotnet/10.0
 - Git (for version control)
 - Visual Studio 2022 or JetBrains Rider (optional, for development)
 
@@ -30,7 +30,7 @@ This script will:
 3. Build the Release configuration
 4. Publish a self-contained Windows x64 application
 
-Output location: `bin\Release\net8.0\win-x64\publish\`
+Output location: `bin\Release\net10.0\win-x64\publish\`
 
 #### Step 2: Create Installer
 
@@ -102,7 +102,7 @@ OutputBaseFilename=KaraokePlayer-Setup-{#MyAppVersion}
 
 ### Pre-Installation Testing
 
-1. Navigate to `bin\Release\net8.0\win-x64\publish\`
+1. Navigate to `bin\Release\net10.0\win-x64\publish\`
 2. Run `KaraokePlayer.exe` directly
 3. Verify all features work:
    - Media library scanning
@@ -118,11 +118,11 @@ OutputBaseFilename=KaraokePlayer-Setup-{#MyAppVersion}
 **Test on a Clean System** (recommended):
 
 1. Use a clean Windows VM or test machine
-2. Ensure .NET 8 Runtime is NOT pre-installed (to test the installer check)
+2. Ensure .NET 10 Runtime is NOT pre-installed (to test the installer check)
 3. Run `KaraokePlayer-Setup-1.0.0.exe`
 4. Follow the installation wizard
 5. Verify:
-   - .NET 8 Runtime check works
+   - .NET 10 Runtime check works
    - Application installs to correct location
    - Desktop/Start Menu shortcuts are created
    - Application launches successfully
@@ -227,8 +227,8 @@ dotnet restore --force
 - Install Inno Setup 6 from https://jrsoftware.org/isinfo.php
 - Verify installation path in `build-installer.bat`
 
-**Error: .NET 8 SDK not found**
-- Install .NET 8 SDK from https://dotnet.microsoft.com/download/dotnet/8.0
+**Error: .NET 10 SDK not found**
+- Install .NET 10 SDK from https://dotnet.microsoft.com/download/dotnet/10.0
 - Restart command prompt after installation
 
 ### Build Performance
@@ -281,7 +281,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: karaoke-player-release
-        path: bin/Release/net8.0/win-x64/publish/
+        path: bin/Release/net10.0/win-x64/publish/
 ```
 
 ## Security Considerations
@@ -293,7 +293,7 @@ For production releases, sign the executable and installer:
 1. Obtain a code signing certificate
 2. Sign the executable:
    ```cmd
-   signtool sign /f certificate.pfx /p password /t http://timestamp.digicert.com bin\Release\net8.0\win-x64\publish\KaraokePlayer.exe
+   signtool sign /f certificate.pfx /p password /t http://timestamp.digicert.com bin\Release\net10.0\win-x64\publish\KaraokePlayer.exe
    ```
 3. Sign the installer:
    ```cmd

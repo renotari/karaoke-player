@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -21,9 +21,16 @@
     <ApplicationIcon>Assets\avalonia-logo.ico</ApplicationIcon>
     
     <!-- Publishing Configuration -->
-    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
-    <SelfContained>true</SelfContained>
+    <!-- On Windows the default target is win-x64; on Linux the project builds for the
+         host platform (development/testing), unless -r win-x64 is passed explicitly. -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' == 'Windows_NT'">win-x64</RuntimeIdentifier>
+    <IsWindowsTarget Condition="'$(OS)' == 'Windows_NT' or $(RuntimeIdentifier.StartsWith('win'))">true</IsWindowsTarget>
     <PublishSingleFile>false</PublishSingleFile>
+  </PropertyGroup>
+
+  <!-- Windows release settings (self-contained, ReadyToRun) -->
+  <PropertyGroup Condition="'$(IsWindowsTarget)' == 'true'">
+    <SelfContained>true</SelfContained>
     <PublishReadyToRun>true</PublishReadyToRun>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
@@ -33,13 +40,12 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
-  <!-- Copy LibVLC native binaries to output -->
-  <ItemGroup>
-    <None Include="$(NuGetPackageRoot)videolan.libvlc.windows\3.0.21\build\**\*.*">
-      <Link>libvlc\%(RecursiveDir)%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
+  <!-- LibVLC native binaries: the VideoLAN.LibVLC.Windows package copies them to
+       libvlc\win-x64 (where LibVLCSharp's Core.Initialize looks). Skip the 32-bit copy.
+       On Linux the system libvlc is used. -->
+  <PropertyGroup Condition="'$(IsWindowsTarget)' == 'true'">
+    <VlcWindowsX86Enabled>false</VlcWindowsX86Enabled>
+  </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.8" />
@@ -64,6 +70,14 @@
     <PackageReference Include="ReactiveUI" Version="22.2.1" />
     <PackageReference Include="SkiaSharp" Version="3.119.1" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsWindowsTarget)' == 'true'">
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
+  </ItemGroup>
+
+  <!-- Linux development: SkiaSharp 3.x does not ship Linux native assets by default -->
+  <ItemGroup Condition="'$(IsWindowsTarget)' != 'true'">
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.1" />
   </ItemGroup>
 </Project>

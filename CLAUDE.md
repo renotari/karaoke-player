@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Karaoke Player is a professional Windows karaoke and media player built with .NET 8 and Avalonia UI. It supports multi-format playback (MP4, MKV, WEBM, MP3), features crossfade transitions, audio visualizations, and flexible single/dual-screen display modes optimized for large media libraries (30,000+ files).
+Karaoke Player is a professional Windows karaoke and media player built with .NET 10 and Avalonia UI. It supports multi-format playback (MP4, MKV, WEBM, MP3), features crossfade transitions, audio visualizations, and flexible single/dual-screen display modes optimized for large media libraries (30,000+ files).
 
 **Technology Stack:**
-- Framework: .NET 8 (C#)
+- Framework: .NET 10 (C#)
 - UI: Avalonia UI 11.3 (MVVM pattern with ReactiveUI)
 - Media Engine: LibVLCSharp 3.9
 - Database: SQLite with Entity Framework Core 9.0
@@ -15,6 +15,19 @@ Karaoke Player is a professional Windows karaoke and media player built with .NE
 - Metadata: TagLib#, MediaInfo.Wrapper
 
 ## Build and Development Commands
+
+### Cross-platform development (Linux)
+
+The app targets Windows, but the project also builds and runs on Linux for development:
+on Linux the build targets the host platform and uses the system libvlc
+(`sudo apt install dotnet-sdk-10.0 vlc libvlc-dev`). The Windows-only bits
+(`win-x64` RID, self-contained, ReadyToRun, `VideoLAN.LibVLC.Windows`) are enabled
+when building on Windows or when passing `-r win-x64`.
+
+```bash
+dotnet build                                   # Linux build for local testing
+dotnet publish -c Release -r win-x64           # Windows build, cross-compiled from Linux
+```
 
 ### Building the Application
 
@@ -325,7 +338,7 @@ When adding tests, follow existing patterns and register in the appropriate test
 ## Installer and Deployment
 
 **Installer Script:** `Setup.iss` (Inno Setup format)
-- Creates Windows installer with .NET 8 runtime check
+- Creates Windows installer with .NET 10 runtime check
 - Installs to `C:\Program Files\Karaoke Player`
 - Creates desktop and start menu shortcuts
 - Handles application data directory setup

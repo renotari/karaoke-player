@@ -51,10 +51,10 @@ echo ========================================
 echo Build completed successfully!
 echo ========================================
 echo.
-echo Output location: bin\Release\net8.0\win-x64\publish\
+echo Output location: bin\Release\net10.0\win-x64\publish\
 echo.
 echo Next steps:
-echo 1. Test the application in bin\Release\net8.0\win-x64\publish\
+echo 1. Test the application in bin\Release\net10.0\win-x64\publish\
 echo 2. Run build-installer.bat to create the installer
 echo.
 pause

@@ -11,6 +11,9 @@ public static class TestRunner
 {
     public static async Task Main(string[] args)
     {
+        // Initialize ReactiveUI the same way App does (touching RxApp runs its static setup)
+        _ = ReactiveUI.RxApp.MainThreadScheduler;
+
         Console.WriteLine("Running Karaoke Player Service Tests\n");
         Console.WriteLine("=====================================\n");
 

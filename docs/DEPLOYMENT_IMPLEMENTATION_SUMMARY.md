@@ -46,7 +46,7 @@ This ensures all LibVLC DLLs and plugins are included in the published applicati
 
 Comprehensive Inno Setup installer script with:
 - Application metadata and branding
-- .NET 8 Runtime detection and download prompt
+- .NET 10 Runtime detection and download prompt
 - Desktop and Start Menu shortcuts
 - Uninstaller configuration
 - Application data directory creation
@@ -54,7 +54,7 @@ Comprehensive Inno Setup installer script with:
 - 64-bit architecture support
 
 **Features**:
-- Checks for .NET 8 Runtime before installation
+- Checks for .NET 10 Runtime before installation
 - Creates default settings directory on install
 - Provides option to launch application after installation
 - Generates installer: `KaraokePlayer-Setup-1.0.0.exe`
@@ -154,7 +154,7 @@ Added deployment-related entries:
 ## Build Output Structure
 
 ```
-bin\Release\net8.0\win-x64\publish\
+bin\Release\net10.0\win-x64\publish\
 ├── KaraokePlayer.exe              # Main application
 ├── libvlc\                        # LibVLC native binaries
 │   ├── libvlc.dll
@@ -227,7 +227,7 @@ All requirements from the task have been successfully implemented:
 Before distributing to users:
 
 1. **Clean System Test**:
-   - Test installer on Windows 10/11 VM without .NET 8
+   - Test installer on Windows 10/11 VM without .NET 10
    - Verify .NET Runtime check works
    - Confirm all features function correctly
 

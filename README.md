@@ -50,7 +50,7 @@ A professional karaoke and media player application for Windows with advanced fe
 - **Graphics**: DirectX 12 compatible graphics card with hardware acceleration
 
 ### Dependencies
-- **.NET 8 Runtime**: Automatically checked during installation
+- **.NET 10 Runtime**: Automatically checked during installation
 - **LibVLC**: Bundled with the application
 
 ## Installation
@@ -60,14 +60,14 @@ A professional karaoke and media player application for Windows with advanced fe
 1. Download `KaraokePlayer-Setup-1.0.0.exe` from the releases page
 2. Run the installer and follow the setup wizard
 3. The installer will:
-   - Check for .NET 8 Runtime (prompt to download if missing)
+   - Check for .NET 10 Runtime (prompt to download if missing)
    - Install the application to `C:\Program Files\Karaoke Player`
    - Create desktop and start menu shortcuts
    - Set up application data directory
 
 ### Manual Installation
 
-1. Ensure .NET 8 Runtime is installed: https://dotnet.microsoft.com/download/dotnet/8.0
+1. Ensure .NET 10 Runtime is installed: https://dotnet.microsoft.com/download/dotnet/10.0
 2. Extract the application files to your desired location
 3. Run `KaraokePlayer.exe`
 
@@ -210,7 +210,7 @@ Change style in Settings > Display > Visualization Style
 ### Common Issues
 
 **Application won't start**:
-- Verify .NET 8 Runtime is installed
+- Verify .NET 10 Runtime is installed
 - Check Windows Event Viewer for error details
 - Review log files in `%APPDATA%\KaraokePlayer\logs`
 
@@ -251,7 +251,7 @@ Change style in Settings > Display > Visualization Style
 
 ### Prerequisites
 
-- .NET 8 SDK: https://dotnet.microsoft.com/download/dotnet/8.0
+- .NET 10 SDK: https://dotnet.microsoft.com/download/dotnet/10.0
 - Visual Studio 2022 or JetBrains Rider (optional)
 - Git
 
@@ -285,7 +285,7 @@ Change style in Settings > Display > Visualization Style
    dotnet publish -c Release -r win-x64 --self-contained
    ```
 
-2. Output will be in: `bin\Release\net8.0\win-x64\publish\`
+2. Output will be in: `bin\Release\net10.0\win-x64\publish\`
 
 ### Creating an Installer
 
@@ -303,7 +303,7 @@ Change style in Settings > Display > Visualization Style
 
 ## Technology Stack
 
-- **Framework**: .NET 8 (C#)
+- **Framework**: .NET 10 (C#)
 - **UI Framework**: Avalonia UI 11.3
 - **Media Engine**: LibVLCSharp 3.9
 - **Database**: SQLite with Entity Framework Core 9.0

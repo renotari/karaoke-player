@@ -21,7 +21,7 @@ if not exist %INNO_SETUP% (
 )
 
 REM Check if release build exists
-if not exist "bin\Release\net8.0\win-x64\publish\KaraokePlayer.exe" (
+if not exist "bin\Release\net10.0\win-x64\publish\KaraokePlayer.exe" (
     echo ERROR: Release build not found!
     echo.
     echo Please run build-release.bat first to create the release build.

@@ -57,7 +57,7 @@ public class TestPlaybackWindow
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ FAILED: {ex.Message}");
+            Console.WriteLine($"❌ FAILED: {ex}");
         }
     }
 
