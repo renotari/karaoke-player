@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using KaraokePlayer.Models;
 using LibVLCSharp.Shared;
@@ -8,34 +9,107 @@ using LibVLCSharp.Shared;
 namespace KaraokePlayer.Services;
 
 /// <summary>
-/// Controls media playback using LibVLC with dual player instances for crossfade
+/// Controls media playback using LibVLC.
+///
+/// Two MediaPlayer instances are used for crossfade: the "active" one plays the
+/// current song, the other one holds the preloaded next song. Each renders into its
+/// own native video window (<see cref="AttachVideoWindows"/>); during a crossfade the
+/// incoming song becomes active immediately (the UI switches to its window: a real
+/// video fade is not possible on a native surface) while the two audio tracks
+/// overlap and fade. Events coming from the non-active player are ignored.
+///
+/// LibVLC callbacks must not call back into LibVLC on the same thread, so work
+/// triggered from its events is moved to the thread pool.
 /// </summary>
 public class MediaPlayerController : IMediaPlayerController, IDisposable
 {
+    public const string DefaultAudioDeviceName = "Default Audio Device";
+
     private readonly LibVLC _libVLC;
-    private readonly MediaPlayer _currentPlayer;
-    private readonly MediaPlayer _preloadedPlayer;
+    private readonly MediaPlayer[] _players;
+    private int _active; // index of the active player in _players
     private readonly ILoggingService? _loggingService;
+    // _sync guards player/crossfade state. LibVLC event handlers must never take it:
+    // Stop() blocks until LibVLC has delivered its events, so a handler waiting on
+    // _sync would deadlock. The playback state uses its own lock.
+    private readonly object _sync = new();
+    private readonly object _stateLock = new();
+
     private PlaybackState _state;
     private MediaFile? _currentMedia;
     private MediaFile? _preloadedMedia;
+    private MediaFile? _pendingPreload; // requested while a crossfade was using the other player
     private float _volume = 0.5f;
     private bool _subtitlesEnabled = true;
-    private readonly object _stateLock = new();
     private readonly float[] _audioSpectrum = new float[256];
-    
-    // Crossfade properties
-    private bool _crossfadeEnabled = false;
-    private int _crossfadeDuration = 5; // Default 5 seconds
-    private bool _crossfadeInProgress = false;
-    private System.Threading.Timer? _crossfadeTimer;
-    private DateTime _crossfadeStartTime;
-    private int _originalCurrentVolume;
-    private bool _isPreloadedPlayerActive = false;
+    private string? _audioDeviceId; // null = system default
 
-    // Crossfade failure protection
-    private int _skipAttempts = 0;
-    private const int MAX_SKIP_ATTEMPTS = 3;
+    // Crossfade
+    private bool _crossfadeEnabled;
+    private int _crossfadeDuration = 5;
+    private bool _crossfadeInProgress;
+    private Timer? _crossfadeTimer;
+    private DateTime _crossfadeStartTime;
+    private bool _disposed;
+
+    public MediaPlayerController(ILoggingService? loggingService = null)
+    {
+        _loggingService = loggingService;
+
+        Core.Initialize();
+        _libVLC = new LibVLC("--no-video-title-show");
+
+        _players = new[] { new MediaPlayer(_libVLC), new MediaPlayer(_libVLC) };
+        foreach (var player in _players)
+        {
+            Subscribe(player);
+        }
+
+        Active.Volume = (int)(_volume * 100);
+        Other.Volume = 0;
+
+        _loggingService?.LogInformation("MediaPlayerController initialized");
+    }
+
+    // LibVLCSharp raises MediaPlayer events with its internal event manager as the
+    // sender, not the MediaPlayer: subscribe through closures that pass the player.
+    private readonly List<Action> _unsubscribe = new();
+
+    private void Subscribe(MediaPlayer player)
+    {
+        EventHandler<EventArgs> playing = (_, e) => OnPlaying(player, e);
+        EventHandler<EventArgs> paused = (_, e) => OnPaused(player, e);
+        EventHandler<EventArgs> stopped = (_, e) => OnStopped(player, e);
+        EventHandler<EventArgs> endReached = (_, e) => OnEndReached(player, e);
+        EventHandler<EventArgs> error = (_, e) => OnEncounteredError(player, e);
+        EventHandler<MediaPlayerTimeChangedEventArgs> timeChanged = (_, e) => OnTimeChanged(player, e);
+        EventHandler<MediaPlayerBufferingEventArgs> buffering = (_, e) => OnBuffering(player, e);
+
+        player.Playing += playing;
+        player.Paused += paused;
+        player.Stopped += stopped;
+        player.EndReached += endReached;
+        player.EncounteredError += error;
+        player.TimeChanged += timeChanged;
+        player.Buffering += buffering;
+
+        _unsubscribe.Add(() =>
+        {
+            player.Playing -= playing;
+            player.Paused -= paused;
+            player.Stopped -= stopped;
+            player.EndReached -= endReached;
+            player.EncounteredError -= error;
+            player.TimeChanged -= timeChanged;
+            player.Buffering -= buffering;
+        });
+    }
+
+    private MediaPlayer Active => _players[_active];
+    private MediaPlayer Other => _players[1 - _active];
+    private bool IsActive(object? sender) => ReferenceEquals(sender, Active);
+
+    #region Properties and events
 
     public PlaybackState State
     {
@@ -67,9 +141,9 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     }
 
     // LibVLC returns -1 when no media is loaded: clamp to 0
-    public double CurrentTime => Math.Max(0, GetActivePlayer().Time) / 1000.0;
+    public double CurrentTime => Math.Max(0, Active.Time) / 1000.0;
 
-    public double Duration => Math.Max(0, GetActivePlayer().Length) / 1000.0;
+    public double Duration => Math.Max(0, Active.Length) / 1000.0;
 
     public float Volume => _volume;
 
@@ -81,37 +155,17 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
 
     public int CrossfadeDuration => _crossfadeDuration;
 
+    public bool AudioNormalizationEnabled { get; set; }
+
     public event EventHandler<PlaybackStateChangedEventArgs>? StateChanged;
     public event EventHandler<TimeChangedEventArgs>? TimeChanged;
     public event EventHandler<MediaEndedEventArgs>? MediaEnded;
     public event EventHandler<PlaybackErrorEventArgs>? PlaybackError;
+    public event EventHandler<CrossfadeStartedEventArgs>? CrossfadeStarted;
 
-    public MediaPlayerController(ILoggingService? loggingService = null)
-    {
-        _loggingService = loggingService;
-        
-        // Initialize LibVLC
-        Core.Initialize();
-        
-        _libVLC = new LibVLC();
-        _currentPlayer = new MediaPlayer(_libVLC);
-        _preloadedPlayer = new MediaPlayer(_libVLC);
+    #endregion
 
-        // Wire up events for current player
-        _currentPlayer.Playing += OnPlaying;
-        _currentPlayer.Paused += OnPaused;
-        _currentPlayer.Stopped += OnStopped;
-        _currentPlayer.EndReached += OnEndReached;
-        _currentPlayer.EncounteredError += OnEncounteredError;
-        _currentPlayer.TimeChanged += OnTimeChanged;
-        _currentPlayer.Buffering += OnBuffering;
-
-        // Set initial volume
-        _currentPlayer.Volume = (int)(_volume * 100);
-        _preloadedPlayer.Volume = 0; // Preloaded player starts muted
-        
-        _loggingService?.LogInformation("MediaPlayerController initialized");
-    }
+    #region Playback
 
     public async Task PlayAsync(MediaFile mediaFile)
     {
@@ -122,42 +176,28 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         {
             try
             {
-                // Cancel any ongoing crossfade
-                if (_crossfadeInProgress)
+                lock (_sync)
                 {
                     CancelCrossfade();
+
+                    var player = Active;
+                    player.Stop();
+
+                    var previousMedia = player.Media;
+                    player.Media = CreateMedia(mediaFile);
+                    previousMedia?.Dispose();
+
+                    _currentMedia = mediaFile;
+                    if (_preloadedMedia?.Id == mediaFile.Id)
+                    {
+                        // The preloaded song is being played directly: the queue will preload a new one
+                        _preloadedMedia = null;
+                    }
+
+                    player.Volume = (int)(_volume * 100);
+                    player.Play();
+                    ApplyAudioDevice(player);
                 }
-
-                var activePlayer = GetActivePlayer();
-
-                // Stop current playback
-                if (activePlayer.IsPlaying)
-                {
-                    activePlayer.Stop();
-                }
-
-                // Create media from file path
-                var media = new Media(_libVLC, mediaFile.FilePath, FromType.FromPath);
-                
-                // Set media to active player (and release the previous one)
-                var previousMedia = activePlayer.Media;
-                activePlayer.Media = media;
-                previousMedia?.Dispose();
-
-                // Store current media reference
-                _currentMedia = mediaFile;
-
-                // Apply subtitle settings
-                if (!_subtitlesEnabled && activePlayer.SpuCount > 0)
-                {
-                    activePlayer.SetSpu(-1); // Disable subtitles
-                }
-
-                // Restore volume to active player
-                activePlayer.Volume = (int)(_volume * 100);
-
-                // Start playback
-                activePlayer.Play();
 
                 State = PlaybackState.Buffering;
             }
@@ -176,44 +216,47 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
 
     public void Pause()
     {
-        var activePlayer = GetActivePlayer();
-        if (activePlayer.IsPlaying)
+        lock (_sync)
         {
-            activePlayer.Pause();
+            // Pausing in the middle of a crossfade: finish it (drop the outgoing song)
+            CancelCrossfade();
+
+            if (Active.IsPlaying)
+            {
+                Active.Pause();
+            }
         }
     }
 
     public void Resume()
     {
-        var activePlayer = GetActivePlayer();
-        if (activePlayer.CanPause && !activePlayer.IsPlaying)
+        lock (_sync)
         {
-            activePlayer.Play();
+            if (Active.Media != null && !Active.IsPlaying)
+            {
+                Active.SetPause(false);
+            }
         }
     }
 
     public void Stop()
     {
-        // Cancel any ongoing crossfade
-        if (_crossfadeInProgress)
+        lock (_sync)
         {
             CancelCrossfade();
+            Active.Stop();
+            _currentMedia = null;
         }
 
-        var activePlayer = GetActivePlayer();
-        activePlayer.Stop();
-        _currentMedia = null;
-        _preloadedMedia = null;
         State = PlaybackState.Stopped;
     }
 
     public void Seek(double timeInSeconds)
     {
-        var activePlayer = GetActivePlayer();
-        if (activePlayer.IsSeekable)
+        var player = Active;
+        if (player.IsSeekable)
         {
-            var timeInMs = (long)(timeInSeconds * 1000);
-            activePlayer.Time = timeInMs;
+            player.Time = (long)(Math.Max(0, timeInSeconds) * 1000);
         }
     }
 
@@ -223,91 +266,183 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
             throw new ArgumentOutOfRangeException(nameof(level), "Volume must be between 0.0 and 1.0");
 
         _volume = level;
-        
-        // Only update active player volume if not in crossfade
+
+        // During a crossfade the fade timer drives the volumes (it reads _volume)
         if (!_crossfadeInProgress)
         {
-            var activePlayer = GetActivePlayer();
-            activePlayer.Volume = (int)(level * 100);
+            Active.Volume = (int)(level * 100);
         }
-    }
-
-    public void SetAudioDevice(string deviceId)
-    {
-        if (string.IsNullOrWhiteSpace(deviceId))
-            throw new ArgumentException("Device ID cannot be empty", nameof(deviceId));
-
-        try
-        {
-            _currentPlayer.SetAudioOutput(deviceId);
-            _preloadedPlayer.SetAudioOutput(deviceId);
-        }
-        catch (Exception ex)
-        {
-            PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
-            {
-                ErrorMessage = $"Failed to set audio device: {ex.Message}",
-                Exception = ex
-            });
-        }
-    }
-
-    public List<AudioDevice> GetAudioDevices()
-    {
-        var devices = new List<AudioDevice>();
-
-        try
-        {
-            var audioOutputs = _libVLC.AudioOutputs;
-            
-            foreach (var output in audioOutputs)
-            {
-                devices.Add(new AudioDevice
-                {
-                    Id = output.Name,
-                    Name = output.Description
-                });
-            }
-        }
-        catch (Exception)
-        {
-            // If we can't get devices, return empty list
-        }
-
-        return devices;
     }
 
     public void ToggleSubtitles(bool enabled)
     {
         _subtitlesEnabled = enabled;
 
-        var activePlayer = GetActivePlayer();
-        if (activePlayer.Media != null)
+        var player = Active;
+        if (player.Media != null)
         {
-            if (enabled && activePlayer.SpuCount > 0)
+            if (enabled && player.SpuCount > 0)
             {
                 // Enable first subtitle track
-                activePlayer.SetSpu(0);
+                player.SetSpu(0);
             }
             else
             {
-                // Disable subtitles
-                activePlayer.SetSpu(-1);
+                player.SetSpu(-1);
             }
         }
     }
 
     public float[] GetAudioSpectrum()
     {
-        // Note: LibVLC doesn't provide direct audio spectrum access in the same way as Web Audio API
-        // This is a placeholder that returns the spectrum array
-        // In a full implementation, you would need to use LibVLC audio callbacks
-        // or implement a custom audio filter to capture spectrum data
-        
-        // For now, return zeros (visualization will need to be implemented separately)
+        // LibVLC does not expose the audio spectrum without replacing the audio output;
+        // the visualization engine animates without real spectrum data.
         return _audioSpectrum;
     }
 
+    private Media CreateMedia(MediaFile mediaFile)
+    {
+        var media = new Media(_libVLC, mediaFile.FilePath, FromType.FromPath);
+
+        if (AudioNormalizationEnabled)
+        {
+            media.AddOption(":audio-filter=normvol");
+        }
+
+        if (mediaFile.Type == Models.MediaType.Audio)
+        {
+            // Do not decode embedded cover art as a video track
+            media.AddOption(":no-video");
+        }
+
+        return media;
+    }
+
+    #endregion
+
+    #region Video window and audio device
+
+    /// <summary>
+    /// Native windows (HWND on Windows, X11 window on Linux) the two players render
+    /// into: player 0 into <paramref name="first"/>, player 1 into <paramref name="second"/>.
+    /// LibVLC cannot reuse a window another player has just used, so each player needs
+    /// its own; the UI shows the one of <see cref="ActivePlayerIndex"/>.
+    /// Takes effect for media started afterwards.
+    /// </summary>
+    public void AttachVideoWindows(IntPtr first, IntPtr second)
+    {
+        lock (_sync)
+        {
+            SetVideoWindow(_players[0], first);
+            SetVideoWindow(_players[1], second);
+        }
+    }
+
+    /// <summary>Index (0 or 1) of the player playing the current song.</summary>
+    public int ActivePlayerIndex => _active;
+
+    private static void SetVideoWindow(MediaPlayer player, IntPtr handle)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            player.Hwnd = handle;
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            player.XWindow = (uint)handle.ToInt64();
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            player.NsObject = handle;
+        }
+    }
+
+    /// <summary>
+    /// Selects the audio output device (speakers, HDMI, USB...). An empty id means
+    /// the system default. The choice is re-applied every time a song starts,
+    /// because LibVLC can reset it when the audio output is recreated.
+    /// </summary>
+    public void SetAudioDevice(string deviceId)
+    {
+        _audioDeviceId = string.IsNullOrWhiteSpace(deviceId) ? null : deviceId;
+        foreach (var player in _players)
+        {
+            ApplyAudioDevice(player);
+        }
+    }
+
+    private void ApplyAudioDevice(MediaPlayer player)
+    {
+        if (_audioDeviceId == null)
+            return;
+
+        try
+        {
+            player.SetOutputDevice(_audioDeviceId);
+        }
+        catch (Exception ex)
+        {
+            _loggingService?.LogWarning($"Failed to set audio device '{_audioDeviceId}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Audio output devices reported by LibVLC. The first entry (empty id) is the system default.
+    /// </summary>
+    public List<AudioDevice> GetAudioDevices()
+    {
+        var devices = new List<AudioDevice>
+        {
+            new AudioDevice { Id = string.Empty, Name = DefaultAudioDeviceName }
+        };
+
+        try
+        {
+            foreach (var device in Active.AudioOutputDeviceEnum)
+            {
+                if (string.IsNullOrEmpty(device.DeviceIdentifier))
+                    continue;
+
+                devices.Add(new AudioDevice
+                {
+                    Id = device.DeviceIdentifier,
+                    Name = string.IsNullOrWhiteSpace(device.Description) ? device.DeviceIdentifier : device.Description
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _loggingService?.LogWarning($"Could not list audio devices: {ex.Message}");
+        }
+
+        return devices;
+    }
+
+    /// <summary>The player currently rendering video.</summary>
+    public MediaPlayer GetActiveMediaPlayer() => Active;
+
+    #endregion
+
+    #region Preload and crossfade
+
+    public void EnableCrossfade(bool enabled, int durationSeconds)
+    {
+        if (durationSeconds < 1 || durationSeconds > 20)
+            throw new ArgumentOutOfRangeException(nameof(durationSeconds), "Crossfade duration must be between 1 and 20 seconds");
+
+        _crossfadeEnabled = enabled;
+        _crossfadeDuration = durationSeconds;
+
+        if (!enabled)
+        {
+            lock (_sync)
+            {
+                CancelCrossfade();
+            }
+        }
+    }
+
+    /// <summary>Loads the next song in the second player so a crossfade can start instantly.</summary>
     public async Task PreloadNextAsync(MediaFile mediaFile)
     {
         if (mediaFile == null)
@@ -317,30 +452,24 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         {
             try
             {
-                var inactivePlayer = GetInactivePlayer();
-
-                // Stop any existing preloaded media
-                if (inactivePlayer.IsPlaying)
+                lock (_sync)
                 {
-                    inactivePlayer.Stop();
+                    if (_crossfadeInProgress)
+                    {
+                        // The other player is still fading out the previous song
+                        _pendingPreload = mediaFile;
+                        return;
+                    }
+
+                    if (_preloadedMedia?.Id == mediaFile.Id && Other.Media != null)
+                        return;
+
+                    LoadInto(Other, mediaFile);
                 }
-
-                // Create media from file path
-                var media = new Media(_libVLC, mediaFile.FilePath, FromType.FromPath);
-                
-                // Set media to inactive player (for preloading)
-                inactivePlayer.Media = media;
-
-                // Store preloaded media reference
-                _preloadedMedia = mediaFile;
-
-                // Parse the media to get metadata without playing
-                media.Parse(MediaParseOptions.ParseNetwork);
             }
             catch (Exception ex)
             {
                 _preloadedMedia = null;
-                
                 PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
                 {
                     ErrorMessage = $"Failed to preload media: {ex.Message}",
@@ -351,33 +480,162 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         });
     }
 
-    #region LibVLC Event Handlers
+    /// <summary>Forgets the preloaded song (the queue has no next song any more).</summary>
+    public void ClearPreload()
+    {
+        lock (_sync)
+        {
+            _pendingPreload = null;
+            if (!_crossfadeInProgress)
+            {
+                _preloadedMedia = null;
+            }
+        }
+    }
+
+    private void LoadInto(MediaPlayer player, MediaFile mediaFile)
+    {
+        player.Stop();
+        var previousMedia = player.Media;
+        player.Media = CreateMedia(mediaFile);
+        previousMedia?.Dispose();
+        player.Volume = 0;
+        _preloadedMedia = mediaFile;
+    }
+
+    private void StartCrossfade()
+    {
+        MediaFile? from, to;
+
+        lock (_sync)
+        {
+            if (_crossfadeInProgress || _preloadedMedia == null || !_crossfadeEnabled || _disposed)
+                return;
+
+            var outgoing = Active;
+            var incoming = Other;
+
+            try
+            {
+                incoming.Volume = 0;
+                incoming.Play();
+                ApplyAudioDevice(incoming);
+            }
+            catch (Exception ex)
+            {
+                _loggingService?.LogError("Crossfade could not start", ex);
+                _preloadedMedia = null;
+                return; // the current song simply plays to its end
+            }
+
+            from = _currentMedia;
+            to = _preloadedMedia;
+
+            _active = 1 - _active;
+            _currentMedia = to;
+            _preloadedMedia = null;
+            _crossfadeInProgress = true;
+            _crossfadeStartTime = DateTime.UtcNow;
+            _crossfadeTimer = new Timer(_ => UpdateCrossfade(), null, 0, 50);
+        }
+
+        _loggingService?.LogPlaybackEvent("CrossfadeStarted",
+            $"From: {from?.Filename ?? "Unknown"} To: {to?.Filename ?? "Unknown"} Duration: {_crossfadeDuration}s");
+
+        CrossfadeStarted?.Invoke(this, new CrossfadeStartedEventArgs { From = from, To = to! });
+    }
+
+    private void UpdateCrossfade()
+    {
+        lock (_sync)
+        {
+            if (!_crossfadeInProgress)
+                return;
+
+            var progress = Math.Min((DateTime.UtcNow - _crossfadeStartTime).TotalSeconds / _crossfadeDuration, 1.0);
+            var target = _volume * 100;
+
+            try
+            {
+                Active.Volume = (int)(target * progress);       // incoming
+                Other.Volume = (int)(target * (1.0 - progress)); // outgoing
+            }
+            catch (Exception ex)
+            {
+                _loggingService?.LogError("Crossfade volume update failed", ex);
+                progress = 1.0;
+            }
+
+            if (progress >= 1.0)
+            {
+                CancelCrossfade();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Ends a crossfade (if any): stops the outgoing song and restores the volume.
+    /// Must be called with _sync held.
+    /// </summary>
+    private void CancelCrossfade()
+    {
+        if (!_crossfadeInProgress)
+            return;
+
+        _crossfadeTimer?.Dispose();
+        _crossfadeTimer = null;
+        _crossfadeInProgress = false;
+
+        var outgoing = Other;
+        // Stop on the thread pool: this may run on the timer thread, never on a LibVLC thread
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try { outgoing.Stop(); } catch { /* already stopped */ }
+        });
+        Active.Volume = (int)(_volume * 100);
+
+        if (_pendingPreload != null)
+        {
+            var next = _pendingPreload;
+            _pendingPreload = null;
+            _ = PreloadNextAsync(next);
+        }
+    }
+
+    #endregion
+
+    #region LibVLC events
 
     private void OnPlaying(object? sender, EventArgs e)
     {
+        if (!IsActive(sender)) return;
         State = PlaybackState.Playing;
-        _skipAttempts = 0; // Reset skip counter on successful playback
         _loggingService?.LogPlaybackEvent("Playing", $"File: {_currentMedia?.Filename ?? "Unknown"}");
     }
 
     private void OnPaused(object? sender, EventArgs e)
     {
+        if (!IsActive(sender)) return;
         State = PlaybackState.Paused;
         _loggingService?.LogPlaybackEvent("Paused", $"File: {_currentMedia?.Filename ?? "Unknown"}");
     }
 
     private void OnStopped(object? sender, EventArgs e)
     {
+        if (!IsActive(sender)) return;
         State = PlaybackState.Stopped;
         _loggingService?.LogPlaybackEvent("Stopped", $"File: {_currentMedia?.Filename ?? "Unknown"}");
     }
 
     private void OnEndReached(object? sender, EventArgs e)
     {
+        // The outgoing song of a crossfade ending is expected: ignore it
+        if (!IsActive(sender)) return;
+
         var endedMedia = _currentMedia;
         State = PlaybackState.Stopped;
         _loggingService?.LogPlaybackEvent("EndReached", $"File: {endedMedia?.Filename ?? "Unknown"}");
-        
+
         MediaEnded?.Invoke(this, new MediaEndedEventArgs
         {
             MediaFile = endedMedia
@@ -386,9 +644,11 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
 
     private void OnEncounteredError(object? sender, EventArgs e)
     {
+        if (!IsActive(sender)) return;
+
         State = PlaybackState.Error;
         _loggingService?.LogError($"Playback error for file: {_currentMedia?.Filename ?? "Unknown"}");
-        
+
         PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
         {
             ErrorMessage = "LibVLC encountered a playback error",
@@ -398,35 +658,37 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
 
     private void OnTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
     {
+        if (!IsActive(sender)) return;
+
         var currentTime = e.Time / 1000.0;
         var duration = Duration;
-        
+
         TimeChanged?.Invoke(this, new TimeChangedEventArgs
         {
             CurrentTime = currentTime,
             Duration = duration
         });
 
-        // Check if we should trigger crossfade
         if (_crossfadeEnabled && !_crossfadeInProgress && _preloadedMedia != null && duration > 0)
         {
             var timeRemaining = duration - currentTime;
-            
-            // Trigger crossfade at the configured time before song end
             if (timeRemaining <= _crossfadeDuration && timeRemaining > 0)
             {
-                StartCrossfade();
+                // Not on the LibVLC event thread
+                ThreadPool.QueueUserWorkItem(_ => StartCrossfade());
             }
         }
     }
 
     private void OnBuffering(object? sender, MediaPlayerBufferingEventArgs e)
     {
+        if (!IsActive(sender)) return;
+
         if (e.Cache < 100)
         {
             State = PlaybackState.Buffering;
         }
-        else if (_currentPlayer.IsPlaying)
+        else if (Active.IsPlaying)
         {
             State = PlaybackState.Playing;
         }
@@ -434,303 +696,31 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
 
     #endregion
 
-    #region Helper Methods
-
-    private MediaPlayer GetActivePlayer()
-    {
-        return _isPreloadedPlayerActive ? _preloadedPlayer : _currentPlayer;
-    }
-
-    private MediaPlayer GetInactivePlayer()
-    {
-        return _isPreloadedPlayerActive ? _currentPlayer : _preloadedPlayer;
-    }
-
-    /// <summary>
-    /// Gets the active MediaPlayer instance for video rendering
-    /// </summary>
-    /// <returns>The currently active MediaPlayer</returns>
-    public MediaPlayer GetActiveMediaPlayer()
-    {
-        return GetActivePlayer();
-    }
-
-    #endregion
-
-    #region Crossfade Implementation
-
-    public void EnableCrossfade(bool enabled, int durationSeconds)
-    {
-        if (durationSeconds < 1 || durationSeconds > 20)
-            throw new ArgumentOutOfRangeException(nameof(durationSeconds), "Crossfade duration must be between 1 and 20 seconds");
-
-        _crossfadeEnabled = enabled;
-        _crossfadeDuration = durationSeconds;
-    }
-
-    private void StartCrossfade()
-    {
-        if (_crossfadeInProgress || _preloadedMedia == null)
-            return;
-
-        try
-        {
-            _crossfadeInProgress = true;
-            _crossfadeStartTime = DateTime.Now;
-            
-            var activePlayer = GetActivePlayer();
-            var inactivePlayer = GetInactivePlayer();
-            
-            _originalCurrentVolume = activePlayer.Volume;
-
-            // Start playing the preloaded media at volume 0
-            inactivePlayer.Volume = 0;
-            inactivePlayer.Play();
-
-            _loggingService?.LogPlaybackEvent("CrossfadeStarted", 
-                $"From: {_currentMedia?.Filename ?? "Unknown"} To: {_preloadedMedia?.Filename ?? "Unknown"} Duration: {_crossfadeDuration}s");
-
-            // Create a timer to update volumes during crossfade
-            _crossfadeTimer = new System.Threading.Timer(UpdateCrossfadeVolumes, null, 0, 50); // Update every 50ms
-        }
-        catch (Exception ex)
-        {
-            // Protect against infinite skip loop with unplayable files
-            _skipAttempts++;
-
-            if (_skipAttempts >= MAX_SKIP_ATTEMPTS)
-            {
-                _loggingService?.LogError($"Too many consecutive crossfade failures ({_skipAttempts}). Stopping playback.", ex);
-
-                CancelCrossfade();
-                Stop();
-                _skipAttempts = 0;
-
-                PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
-                {
-                    ErrorMessage = $"Too many consecutive playback failures. Please check your media files.",
-                    MediaFile = _preloadedMedia,
-                    Exception = ex
-                });
-                return;
-            }
-
-            // If crossfade fails, cancel it and skip to next song
-            _loggingService?.LogCrossfadeTransition(
-                _currentMedia?.Filename ?? "Unknown",
-                _preloadedMedia?.Filename ?? "Unknown",
-                false,
-                ex.Message
-            );
-
-            CancelCrossfade();
-
-            PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
-            {
-                ErrorMessage = $"Crossfade failed: {ex.Message}",
-                MediaFile = _preloadedMedia,
-                Exception = ex
-            });
-
-            // Skip to the next valid song by ending current playback
-            var activePlayer = GetActivePlayer();
-            activePlayer.Stop();
-        }
-    }
-
-    private void UpdateCrossfadeVolumes(object? state)
-    {
-        if (!_crossfadeInProgress)
-            return;
-
-        try
-        {
-            var elapsed = (DateTime.Now - _crossfadeStartTime).TotalSeconds;
-            var progress = Math.Min(elapsed / _crossfadeDuration, 1.0);
-
-            if (progress >= 1.0)
-            {
-                // Crossfade complete
-                CompleteCrossfade();
-                return;
-            }
-
-            var activePlayer = GetActivePlayer();
-            var inactivePlayer = GetInactivePlayer();
-
-            // Calculate fade curves (linear for simplicity, could use ease-in/out)
-            var fadeOutVolume = (int)(_originalCurrentVolume * (1.0 - progress));
-            var fadeInVolume = (int)(_originalCurrentVolume * progress);
-
-            // Apply volumes - active player fades out, inactive player fades in
-            activePlayer.Volume = Math.Max(0, fadeOutVolume);
-            inactivePlayer.Volume = Math.Min(100, fadeInVolume);
-        }
-        catch (Exception ex)
-        {
-            // If volume update fails, cancel crossfade
-            CancelCrossfade();
-            
-            PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
-            {
-                ErrorMessage = $"Crossfade volume update failed: {ex.Message}",
-                Exception = ex
-            });
-        }
-    }
-
-    private void CompleteCrossfade()
-    {
-        try
-        {
-            // Stop the timer
-            _crossfadeTimer?.Dispose();
-            _crossfadeTimer = null;
-
-            var oldMedia = _currentMedia;
-            var activePlayer = GetActivePlayer();
-
-            // Stop the old player
-            activePlayer.Stop();
-
-            // Swap the players - preloaded becomes current
-            SwapPlayers();
-
-            // Reset crossfade state
-            _crossfadeInProgress = false;
-            _preloadedMedia = null;
-
-            _loggingService?.LogCrossfadeTransition(
-                oldMedia?.Filename ?? "Unknown",
-                _currentMedia?.Filename ?? "Unknown",
-                true
-            );
-
-            // Notify that the previous media has ended
-            MediaEnded?.Invoke(this, new MediaEndedEventArgs
-            {
-                MediaFile = oldMedia
-            });
-        }
-        catch (Exception ex)
-        {
-            _loggingService?.LogError($"Failed to complete crossfade: {ex.Message}", ex);
-            
-            PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
-            {
-                ErrorMessage = $"Failed to complete crossfade: {ex.Message}",
-                Exception = ex
-            });
-        }
-    }
-
-    private void CancelCrossfade()
-    {
-        _crossfadeTimer?.Dispose();
-        _crossfadeTimer = null;
-        _crossfadeInProgress = false;
-
-        var activePlayer = GetActivePlayer();
-        var inactivePlayer = GetInactivePlayer();
-
-        // Stop inactive player if it's playing
-        if (inactivePlayer.IsPlaying)
-        {
-            inactivePlayer.Stop();
-        }
-
-        // Restore active player volume
-        activePlayer.Volume = _originalCurrentVolume;
-        
-        _preloadedMedia = null;
-    }
-
-    private void SwapPlayers()
-    {
-        // The preloaded player is now the active player
-        // We need to swap event handlers and references
-        
-        // Unsubscribe from current player events
-        _currentPlayer.Playing -= OnPlaying;
-        _currentPlayer.Paused -= OnPaused;
-        _currentPlayer.Stopped -= OnStopped;
-        _currentPlayer.EndReached -= OnEndReached;
-        _currentPlayer.EncounteredError -= OnEncounteredError;
-        _currentPlayer.TimeChanged -= OnTimeChanged;
-        _currentPlayer.Buffering -= OnBuffering;
-
-        // Subscribe to preloaded player events
-        _preloadedPlayer.Playing -= OnPlaying;
-        _preloadedPlayer.Paused -= OnPaused;
-        _preloadedPlayer.Stopped -= OnStopped;
-        _preloadedPlayer.EndReached -= OnEndReached;
-        _preloadedPlayer.EncounteredError -= OnEncounteredError;
-        _preloadedPlayer.TimeChanged -= OnTimeChanged;
-        _preloadedPlayer.Buffering -= OnBuffering;
-
-        _preloadedPlayer.Playing += OnPlaying;
-        _preloadedPlayer.Paused += OnPaused;
-        _preloadedPlayer.Stopped += OnStopped;
-        _preloadedPlayer.EndReached += OnEndReached;
-        _preloadedPlayer.EncounteredError += OnEncounteredError;
-        _preloadedPlayer.TimeChanged += OnTimeChanged;
-        _preloadedPlayer.Buffering += OnBuffering;
-
-        // Re-subscribe to current player events for next use
-        _currentPlayer.Playing += OnPlaying;
-        _currentPlayer.Paused += OnPaused;
-        _currentPlayer.Stopped += OnStopped;
-        _currentPlayer.EndReached += OnEndReached;
-        _currentPlayer.EncounteredError += OnEncounteredError;
-        _currentPlayer.TimeChanged += OnTimeChanged;
-        _currentPlayer.Buffering += OnBuffering;
-
-        // Update current media reference
-        _currentMedia = _preloadedMedia;
-
-        // Toggle which player is active
-        _isPreloadedPlayerActive = !_isPreloadedPlayerActive;
-    }
-
-    #endregion
-
     public void Dispose()
     {
-        // Cancel any ongoing crossfade
-        if (_crossfadeInProgress)
+        lock (_sync)
         {
-            CancelCrossfade();
+            if (_disposed)
+                return;
+            _disposed = true;
+
+            _crossfadeTimer?.Dispose();
+            _crossfadeTimer = null;
+            _crossfadeInProgress = false;
         }
 
-        // Dispose crossfade timer
-        _crossfadeTimer?.Dispose();
+        foreach (var unsubscribe in _unsubscribe)
+        {
+            unsubscribe();
+        }
 
-        // Unsubscribe from events
-        _currentPlayer.Playing -= OnPlaying;
-        _currentPlayer.Paused -= OnPaused;
-        _currentPlayer.Stopped -= OnStopped;
-        _currentPlayer.EndReached -= OnEndReached;
-        _currentPlayer.EncounteredError -= OnEncounteredError;
-        _currentPlayer.TimeChanged -= OnTimeChanged;
-        _currentPlayer.Buffering -= OnBuffering;
+        foreach (var player in _players)
+        {
+            player.Stop();
+            player.Media?.Dispose();
+            player.Dispose();
+        }
 
-        _preloadedPlayer.Playing -= OnPlaying;
-        _preloadedPlayer.Paused -= OnPaused;
-        _preloadedPlayer.Stopped -= OnStopped;
-        _preloadedPlayer.EndReached -= OnEndReached;
-        _preloadedPlayer.EncounteredError -= OnEncounteredError;
-        _preloadedPlayer.TimeChanged -= OnTimeChanged;
-        _preloadedPlayer.Buffering -= OnBuffering;
-
-        // Stop playback
-        _currentPlayer.Stop();
-        _preloadedPlayer.Stop();
-
-        // Dispose players
-        _currentPlayer.Dispose();
-        _preloadedPlayer.Dispose();
-
-        // Dispose LibVLC
         _libVLC.Dispose();
     }
 }

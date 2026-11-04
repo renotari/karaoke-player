@@ -45,6 +45,7 @@ public partial class App : Application
     public IMediaPlayerController? MediaPlayerController => _mediaPlayerController;
     public ISearchEngine? SearchEngine => _searchEngine;
     public IMediaLibraryManager? MediaLibraryManager => _mediaLibraryManager;
+    public ILoggingService? LoggingService => _loggingService;
 
     public override void Initialize()
     {
@@ -167,6 +168,10 @@ public partial class App : Application
             // Initialize audio visualization engine
             _audioVisualizationEngine = new AudioVisualizationEngine();
 
+            // Settings take effect immediately when they change (Settings dialog, folder picker...)
+            _settingsManager.SettingsChanged += (_, _) =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplySettings(_settingsManager.GetSettings()));
+
             // Files that appear (or change) while the app is running also need
             // metadata and a thumbnail
             _mediaLibraryManager.FilesAdded += OnLibraryFilesChanged;
@@ -282,54 +287,15 @@ public partial class App : Application
     {
         try
         {
-            if (_settingsManager == null || _mediaLibraryManager == null)
+            if (_settingsManager == null)
                 return;
 
-            // Load settings
             await _settingsManager.LoadSettingsAsync();
             var settings = _settingsManager.GetSettings();
-
             _loggingService?.LogInformation($"Settings loaded - media directory: {settings.MediaDirectory}");
 
-            // Scan media directory if it exists
-            if (!string.IsNullOrEmpty(settings.MediaDirectory) && Directory.Exists(settings.MediaDirectory))
-            {
-                _loggingService?.LogInformation("Scanning media directory...");
-                
-                // Perform scan in background
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await _mediaLibraryManager.ScanDirectoryAsync(settings.MediaDirectory);
-                        _mediaLibraryManager.StartMonitoring();
-
-                        // Start background processing
-                        var files = await _mediaLibraryManager.GetMediaFilesAsync();
-                        foreach (var file in files)
-                        {
-                            if (!file.MetadataLoaded)
-                                _metadataExtractor?.QueueForExtraction(file);
-                            
-                            if (!file.ThumbnailLoaded)
-                                _thumbnailGenerator?.QueueForGeneration(file);
-                        }
-
-                        _metadataExtractor?.StartProcessing();
-                        _thumbnailGenerator?.StartProcessing();
-
-                        _loggingService?.LogInformation("Media directory scan complete");
-                    }
-                    catch (Exception ex)
-                    {
-                        _loggingService?.LogError("Error scanning media directory", ex);
-                    }
-                });
-            }
-            else
-            {
-                _loggingService?.LogWarning($"Media directory not found or not set: {settings.MediaDirectory}");
-            }
+            // Applies everything, including the scan of the media directory
+            ApplySettings(settings);
         }
         catch (Exception ex)
         {
@@ -337,9 +303,156 @@ public partial class App : Application
         }
     }
 
+    // Media directory currently scanned and monitored
+    private string? _activeMediaDirectory;
+
+    /// <summary>
+    /// Applies the settings to the running application. Called at startup and every
+    /// time the settings change. Each step is independent: one failing does not
+    /// prevent the others.
+    /// </summary>
+    private void ApplySettings(AppSettings settings)
+    {
+        void Try(string what, Action action)
+        {
+            try { action(); }
+            catch (Exception ex) { _loggingService?.LogError($"Could not apply setting: {what}", ex); }
+        }
+
+        Try("theme", () =>
+            RequestedThemeVariant = string.Equals(settings.Theme, "light", StringComparison.OrdinalIgnoreCase)
+                ? Avalonia.Styling.ThemeVariant.Light
+                : Avalonia.Styling.ThemeVariant.Dark);
+
+        Try("font size", () =>
+        {
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: { } window }
+                && settings.FontSize is >= 8 and <= 32)
+            {
+                window.FontSize = settings.FontSize;
+            }
+        });
+
+        Try("playback", () =>
+        {
+            if (_mainWindowViewModel != null)
+            {
+                _mainWindowViewModel.Volume = (int)Math.Round(Math.Clamp(settings.Volume, 0, 1) * 100);
+                _mainWindowViewModel.AutoPlayEnabled = settings.AutoPlayEnabled;
+                _mainWindowViewModel.ShuffleModeEnabled = settings.ShuffleMode;
+                _mainWindowViewModel.CrossfadeEnabled = settings.CrossfadeEnabled;
+            }
+
+            if (_mediaPlayerController != null)
+            {
+                _mediaPlayerController.EnableCrossfade(settings.CrossfadeEnabled, Math.Clamp(settings.CrossfadeDuration, 1, 20));
+                _mediaPlayerController.AudioNormalizationEnabled = settings.AudioBoostEnabled;
+            }
+        });
+
+        Try("audio device", () =>
+        {
+            if (_mediaPlayerController == null)
+                return;
+
+            // Settings store the device name shown in the dialog
+            var device = _mediaPlayerController.GetAudioDevices()
+                .FirstOrDefault(d => d.Name == settings.AudioOutputDevice || d.Id == settings.AudioOutputDevice);
+            _mediaPlayerController.SetAudioDevice(device?.Id ?? string.Empty);
+        });
+
+        Try("keyboard shortcuts", () =>
+        {
+            // Defaults first, so actions missing from an older settings file still work
+            var shortcuts = AppSettings.GetDefaultKeyboardShortcuts();
+            foreach (var (action, key) in settings.KeyboardShortcuts)
+            {
+                if (!string.IsNullOrWhiteSpace(key))
+                    shortcuts[action] = key;
+            }
+            _keyboardShortcutManager?.LoadShortcuts(shortcuts);
+        });
+
+        Try("media directory", () =>
+        {
+            var directory = settings.MediaDirectory;
+            if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+            {
+                _loggingService?.LogWarning($"Media directory not found or not set: {directory}");
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    _notificationService?.ShowWarning("Media folder not found",
+                        $"'{directory}' does not exist. Choose another folder in File > Open Media Directory.");
+                }
+                return;
+            }
+
+            if (string.Equals(directory, _activeMediaDirectory, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _activeMediaDirectory = directory;
+            _ = Task.Run(() => ScanMediaDirectoryAsync(directory));
+        });
+    }
+
+    /// <summary>
+    /// Scans the media directory (incremental: only new/changed/removed files are
+    /// touched), monitors it for changes and queues background metadata/thumbnail work.
+    /// Library changes reach the UI through the MediaLibraryManager events.
+    /// </summary>
+    private async Task ScanMediaDirectoryAsync(string directory)
+    {
+        if (_mediaLibraryManager == null)
+            return;
+
+        try
+        {
+            _loggingService?.LogInformation($"Scanning media directory {directory}...");
+
+            _mediaLibraryManager.StopMonitoring();
+            await _mediaLibraryManager.ScanDirectoryAsync(directory);
+            _mediaLibraryManager.StartMonitoring();
+
+            var files = await _mediaLibraryManager.GetMediaFilesAsync();
+            foreach (var file in files)
+            {
+                if (!file.MetadataLoaded)
+                    _metadataExtractor?.QueueForExtraction(file);
+
+                if (!file.ThumbnailLoaded)
+                    _thumbnailGenerator?.QueueForGeneration(file);
+            }
+
+            _metadataExtractor?.StartProcessing();
+            _thumbnailGenerator?.StartProcessing();
+
+            _loggingService?.LogInformation("Media directory scan complete");
+        }
+        catch (Exception ex)
+        {
+            _loggingService?.LogError("Error scanning media directory", ex);
+            _notificationService?.ShowError("Library scan failed", ex.Message);
+        }
+    }
+
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
     {
         _loggingService?.LogInformation("Application shutting down");
+
+        // Remember the volume set with the slider
+        try
+        {
+            if (_settingsManager != null && _mainWindowViewModel != null)
+            {
+                var settings = _settingsManager.GetSettings();
+                settings.Volume = _mainWindowViewModel.Volume / 100.0;
+                _settingsManager.SaveSettingsAsync().GetAwaiter().GetResult();
+            }
+        }
+        catch (Exception ex)
+        {
+            _loggingService?.LogError("Could not save settings on exit", ex);
+        }
         
         // Stop background processing
         _metadataExtractor?.StopProcessing();

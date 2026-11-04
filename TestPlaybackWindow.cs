@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using KaraokePlayer.Models;
 using KaraokePlayer.Services;
@@ -335,6 +335,14 @@ public class TestPlaybackWindow
 // Mock implementation for testing
 public class MockMediaPlayerController : IMediaPlayerController
 {
+    public bool AudioNormalizationEnabled { get; set; }
+    public void AttachVideoWindows(IntPtr first, IntPtr second) { }
+    public int ActivePlayerIndex => 0;
+    public void ClearPreload() { }
+#pragma warning disable CS0067
+    public event EventHandler<CrossfadeStartedEventArgs>? CrossfadeStarted;
+#pragma warning restore CS0067
+
     public PlaybackState State => PlaybackState.Stopped;
     public double CurrentTime => 0;
     public double Duration => 0;

@@ -105,6 +105,13 @@ public class SettingsManager : ReactiveObject, ISettingsManager
 
         // Notify all properties changed
         this.RaisePropertyChanged(string.Empty);
+
+        SettingsChanged?.Invoke(this, new SettingsChangedEventArgs
+        {
+            SettingKey = "All",
+            OldValue = null,
+            NewValue = _currentSettings
+        });
     }
 
     /// <summary>

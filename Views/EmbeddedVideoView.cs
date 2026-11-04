@@ -1,30 +1,38 @@
+using System;
+using Avalonia.Controls;
 using Avalonia.Platform;
-using LibVLCSharp.Avalonia;
 
 namespace KaraokePlayer.Views;
 
 /// <summary>
-/// VideoView that also attaches its MediaPlayer when the native window is created.
+/// Native child window that LibVLC renders video into.
 ///
-/// LibVLCSharp's VideoView only passes the window handle to the MediaPlayer when the
-/// MediaPlayer property is set or on Initialized. With a binding, the MediaPlayer is
-/// usually set before the native window exists, so the handle is never passed and
-/// LibVLC opens its own separate "VLC media player" window instead.
+/// Instead of binding one MediaPlayer (like LibVLCSharp's VideoView), it exposes its
+/// native handle so the MediaPlayerController can attach both of its players to it:
+/// that is what makes crossfades between two videos possible without LibVLC opening
+/// a separate "VLC media player" window for the second player.
+///
+/// Like any native control, nothing can be drawn on top of it by Avalonia.
 /// </summary>
-public class EmbeddedVideoView : VideoView
+public class EmbeddedVideoView : NativeControlHost
 {
+    /// <summary>Native handle (HWND / X11 window), or IntPtr.Zero when not created yet.</summary>
+    public IntPtr Handle { get; private set; }
+
+    /// <summary>Raised when the native window has been created.</summary>
+    public event EventHandler<IntPtr>? HandleCreated;
+
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
     {
         var handle = base.CreateNativeControlCore(parent);
-
-        // Re-assign to trigger VideoView.Attach() now that the handle exists
-        var player = MediaPlayer;
-        if (player != null)
-        {
-            MediaPlayer = null;
-            MediaPlayer = player;
-        }
-
+        Handle = handle.Handle;
+        HandleCreated?.Invoke(this, Handle);
         return handle;
+    }
+
+    protected override void DestroyNativeControlCore(IPlatformHandle control)
+    {
+        Handle = IntPtr.Zero;
+        base.DestroyNativeControlCore(control);
     }
 }

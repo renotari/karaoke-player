@@ -25,6 +25,13 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         
+        // Video: hand the two native windows to the player controller once they exist
+        foreach (var name in new[] { "VideoViewA", "VideoViewB" })
+        {
+            if (this.FindControl<EmbeddedVideoView>(name) is { } view)
+                view.HandleCreated += (_, _) => AttachVideoWindows();
+        }
+
         // Wire up pointer events for control handle after initialization
         Opened += OnWindowOpened;
         Closed += OnWindowClosed;
@@ -102,92 +109,27 @@ public partial class MainWindow : Window
     {
         try
         {
-            Console.WriteLine($"[DEBUG] MainWindow.OpenSettingsAsync called - Thread: {System.Threading.Thread.CurrentThread.ManagedThreadId}");
-
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+            var app = App.Current;
+            if (app?.SettingsManager == null)
             {
-                Console.WriteLine("[DEBUG] Inside Dispatcher.UIThread.InvokeAsync");
-                var app = App.Current;
+                if (DataContext is MainWindowViewModel vm)
+                    vm.StatusMessage = "Error: Settings not available";
+                return;
+            }
 
-                // Log to file
-                var logDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "KaraokePlayer", "Logs");
-                Directory.CreateDirectory(logDir);
-                var logPath = Path.Combine(logDir, "settings-debug.log");
-                File.AppendAllText(logPath, $"\n{DateTime.Now}: OpenSettingsAsync called\n");
+            // The dialog is the owner of its ViewModel: OK/Cancel close the dialog
+            // (passing the main window here closed the whole application)
+            var settingsWindow = new SettingsWindow();
+            settingsWindow.DataContext = new SettingsViewModel(
+                app.SettingsManager,
+                app.MediaPlayerController,
+                settingsWindow);
 
-                if (app?.SettingsManager == null)
-                {
-                    File.AppendAllText(logPath, "ERROR: SettingsManager is null\n");
-                    Console.WriteLine("Error: SettingsManager is null");
-                    if (DataContext is MainWindowViewModel viewModel)
-                    {
-                        viewModel.StatusMessage = "Error: Settings not available";
-                    }
-                    return;
-                }
-
-                if (app?.MediaPlayerController == null)
-                {
-                    File.AppendAllText(logPath, "ERROR: MediaPlayerController is null\n");
-                    Console.WriteLine("Error: MediaPlayerController is null");
-                    if (DataContext is MainWindowViewModel viewModel)
-                    {
-                        viewModel.StatusMessage = "Error: Media player not available";
-                    }
-                    return;
-                }
-
-                File.AppendAllText(logPath, "Creating SettingsViewModel...\n");
-                Console.WriteLine("Creating SettingsViewModel...");
-
-                var settingsViewModel = new SettingsViewModel(
-                    app.SettingsManager,
-                    app.MediaPlayerController,
-                    this
-                );
-                File.AppendAllText(logPath, "SettingsViewModel created successfully\n");
-
-                File.AppendAllText(logPath, "Creating SettingsWindow...\n");
-                Console.WriteLine("Creating SettingsWindow...");
-
-                var settingsWindow = new SettingsWindow
-                {
-                    DataContext = settingsViewModel
-                };
-
-                File.AppendAllText(logPath, "SettingsWindow created, showing dialog...\n");
-                Console.WriteLine("Showing Settings dialog...");
-                await settingsWindow.ShowDialog(this);
-
-                File.AppendAllText(logPath, "Settings dialog closed normally\n");
-                Console.WriteLine("Settings dialog closed");
-            });
+            await settingsWindow.ShowDialog(this);
         }
         catch (Exception ex)
         {
-            // Try to log the error, but don't fail if logging itself fails
-            try
-            {
-                var logDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "KaraokePlayer", "Logs");
-                Directory.CreateDirectory(logDir);
-
-                var logPath = Path.Combine(logDir, "settings-debug.log");
-                File.AppendAllText(logPath, $"EXCEPTION: {ex.Message}\n");
-                File.AppendAllText(logPath, $"Stack trace: {ex.StackTrace}\n");
-            }
-            catch
-            {
-                // Ignore logging errors in exception handler
-            }
-
-            Console.WriteLine($"Error opening settings: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
-
-            // Show error to user
+            App.Current?.LoggingService?.LogError("Error opening settings", ex);
             if (DataContext is MainWindowViewModel viewModel)
             {
                 viewModel.StatusMessage = $"Error opening settings: {ex.Message}";
@@ -215,6 +157,9 @@ public partial class MainWindow : Window
         // Find the search text box for focus management
         _searchTextBox = this.FindControl<TextBox>("SearchTextBox");
 
+        // In case the native video windows were created before the DataContext was set
+        AttachVideoWindows();
+
         // Video Mode: collapse the side columns so the video takes the whole window
         if (DataContext is MainWindowViewModel vm)
         {
@@ -226,6 +171,16 @@ public partial class MainWindow : Window
                 }
             };
             ApplyVideoModeLayout(vm.IsVideoMode);
+        }
+    }
+
+    private void AttachVideoWindows()
+    {
+        var a = this.FindControl<EmbeddedVideoView>("VideoViewA")?.Handle ?? IntPtr.Zero;
+        var b = this.FindControl<EmbeddedVideoView>("VideoViewB")?.Handle ?? IntPtr.Zero;
+        if (a != IntPtr.Zero && b != IntPtr.Zero)
+        {
+            (DataContext as MainWindowViewModel)?.AttachVideoWindows(a, b);
         }
     }
 
@@ -319,35 +274,17 @@ public partial class MainWindow : Window
                 {
                     var result = folders[0].Path.LocalPath;
 
+                    // Saving the setting is enough: the app re-scans the new folder
+                    // and the library updates through its events
                     var app = App.Current;
-                    if (app?.MediaLibraryManager != null && app?.SettingsManager != null)
+                    if (app?.SettingsManager != null)
                     {
-                        // Save the selected directory to settings
                         app.SettingsManager.SetSetting(nameof(Models.AppSettings.MediaDirectory), result);
                         await app.SettingsManager.SaveSettingsAsync();
 
-                        // Scan the new directory
-                        await app.MediaLibraryManager.ScanDirectoryAsync(result);
-                        app.MediaLibraryManager.StartMonitoring();
-
-                        // Update the ViewModel
                         if (DataContext is MainWindowViewModel viewModel)
                         {
                             viewModel.StatusMessage = $"Scanning {result}...";
-
-                            // Reload media files
-                            var files = await app.MediaLibraryManager.GetMediaFilesAsync();
-                            viewModel.MediaFiles.Clear();
-                            viewModel.FilteredMediaFiles.Clear();
-
-                            foreach (var file in files)
-                            {
-                                viewModel.MediaFiles.Add(file);
-                                viewModel.FilteredMediaFiles.Add(file);
-                            }
-
-                            viewModel.MediaLibraryCount = files.Count;
-                            viewModel.StatusMessage = $"Loaded {files.Count} files from {result}";
                         }
                     }
                 }

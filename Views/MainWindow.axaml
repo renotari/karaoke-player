@@ -240,13 +240,14 @@
                                        HorizontalAlignment="Center"/>
                         </StackPanel>
 
-                        <!-- Video surface (LibVLC renders into this native window).
-                             It is always part of the visual tree so its native handle exists
-                             before playback starts; only its visibility changes. Avalonia
-                             controls cannot be drawn on top of it. -->
-                        <views:EmbeddedVideoView x:Name="VideoView"
-                                                 MediaPlayer="{Binding ActiveMediaPlayer}"
-                                                 IsVisible="{Binding IsVideoContent}"/>
+                        <!-- Video surfaces: one native window per LibVLC player (crossfade uses
+                             both). They are always in the visual tree so their native handles
+                             exist before playback starts; only the active one is visible.
+                             Avalonia controls cannot be drawn on top of them. -->
+                        <views:EmbeddedVideoView x:Name="VideoViewA"
+                                                 IsVisible="{Binding IsVideoSurfaceAVisible}"/>
+                        <views:EmbeddedVideoView x:Name="VideoViewB"
+                                                 IsVisible="{Binding IsVideoSurfaceBVisible}"/>
                     </Panel>
 
                     <!-- Collapsible Control Handle at Bottom -->

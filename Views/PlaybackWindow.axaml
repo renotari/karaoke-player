@@ -27,8 +27,7 @@
             
             <!-- LibVLC Video View for Video Files -->
             <views:EmbeddedVideoView x:Name="VideoView"
-                                     IsVisible="{Binding IsVideoContent}"
-                                     MediaPlayer="{Binding MediaPlayer}"/>
+                                     IsVisible="{Binding IsVideoContent}"/>
             
             <!-- Audio Visualization for MP3 Files -->
             <Panel x:Name="VisualizationPanel"

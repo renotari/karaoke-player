@@ -35,12 +35,6 @@ public partial class PlaybackWindow : Window
     {
         if (DataContext is PlaybackWindowViewModel viewModel)
         {
-            // Get the VideoView control and bind it to the ViewModel
-            var videoView = this.FindControl<EmbeddedVideoView>("VideoView");
-            if (videoView != null && viewModel.MediaPlayer != null)
-            {
-                videoView.MediaPlayer = viewModel.MediaPlayer;
-            }
 
             // Subscribe to ViewModel events
             viewModel.FullscreenRequested += OnFullscreenRequested;

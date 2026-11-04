@@ -151,6 +151,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _mediaPlayerController.TimeChanged += OnPlaybackTimeChanged;
             _mediaPlayerController.MediaEnded += OnMediaEnded;
             _mediaPlayerController.PlaybackError += OnPlaybackError;
+            _mediaPlayerController.CrossfadeStarted += OnCrossfadeStarted;
         }
 
         if (_playlistManager != null)
@@ -208,6 +209,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsVideoContent));
         OnPropertyChanged(nameof(IsAudioContent));
         OnPropertyChanged(nameof(IsIdle));
+        UpdateActiveVideoSurface();
+        OnPropertyChanged(nameof(IsVideoSurfaceAVisible));
+        OnPropertyChanged(nameof(IsVideoSurfaceBVisible));
     }
 
     /// <summary>True while a video file is the current song (the video surface is shown).</summary>
@@ -219,11 +223,22 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>True when nothing is playing (the waiting screen is shown).</summary>
     public bool IsIdle => CurrentSong == null;
 
-    /// <summary>
-    /// The LibVLC player currently rendering video. Bound to the VideoView;
-    /// it can change when the controller swaps players (crossfade).
-    /// </summary>
-    public LibVLCSharp.Shared.MediaPlayer? ActiveMediaPlayer => _mediaPlayerController?.GetActiveMediaPlayer();
+    /// <summary>Native windows the two players render video into (from the view).</summary>
+    public void AttachVideoWindows(IntPtr first, IntPtr second) => _mediaPlayerController?.AttachVideoWindows(first, second);
+
+    /// <summary>Which of the two video surfaces belongs to the player of the current song.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsVideoSurfaceAVisible), nameof(IsVideoSurfaceBVisible))]
+    private int _activeVideoSurface;
+
+    public bool IsVideoSurfaceAVisible => IsVideoContent && ActiveVideoSurface == 0;
+    public bool IsVideoSurfaceBVisible => IsVideoContent && ActiveVideoSurface == 1;
+
+    private void UpdateActiveVideoSurface()
+    {
+        if (_mediaPlayerController != null)
+            ActiveVideoSurface = _mediaPlayerController.ActivePlayerIndex;
+    }
 
     partial void OnVolumeChanged(int value)
     {
@@ -486,6 +501,105 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         ClearPlaylistCommand.NotifyCanExecuteChanged();
         ShufflePlaylistCommand.NotifyCanExecuteChanged();
         PlayCommand.NotifyCanExecuteChanged();
+        UpdatePreload();
+    }
+
+    // ----- Crossfade / preload ------------------------------------------------
+
+    private string? _preloadedId;
+
+    /// <summary>
+    /// Keeps the song after the current one loaded in the controller's second
+    /// player, so a crossfade can start on time. Called whenever the queue or
+    /// the playback state changes.
+    /// </summary>
+    private void UpdatePreload()
+    {
+        if (_mediaPlayerController == null || _playlistManager == null)
+            return;
+
+        var list = _playlistManager.GetCurrentPlaylist();
+        var next = IsSongLoaded && AutoPlayEnabled && CrossfadeEnabled && list.Count > 1
+            ? list[1].MediaFile
+            : null;
+
+        if (next == null)
+        {
+            if (_preloadedId != null)
+            {
+                _mediaPlayerController.ClearPreload();
+                _preloadedId = null;
+            }
+            return;
+        }
+
+        if (next.Id == _preloadedId)
+            return;
+
+        _preloadedId = next.Id;
+        _ = _mediaPlayerController.PreloadNextAsync(next);
+    }
+
+    partial void OnCrossfadeEnabledChanged(bool value) => UpdatePreload();
+
+    private void OnCrossfadeStarted(object? sender, CrossfadeStartedEventArgs e)
+        => OnUiThread(() => _ = HandleCrossfadeStartedAsync(e));
+
+    /// <summary>
+    /// The controller already started the next song: advance the queue without
+    /// starting playback again.
+    /// </summary>
+    private async Task HandleCrossfadeStartedAsync(CrossfadeStartedEventArgs e)
+    {
+        if (_playlistManager == null)
+            return;
+
+        _preloadedId = null; // consumed by the controller
+
+        var finished = CurrentSong;
+        if (finished != null)
+        {
+            AddToHistory(finished);
+            var list = _playlistManager.GetCurrentPlaylist();
+            if (list.Count > 0 && list[0].MediaFileId == finished.Id)
+                await _playlistManager.RemoveSongAsync(0);
+        }
+
+        var current = _playlistManager.GetCurrentPlaylist();
+        var index = current.FindIndex(i => i.MediaFileId == e.To.Id);
+        if (index > 0)
+            await _playlistManager.ReorderSongAsync(index, 0);
+        else if (index < 0)
+            await _playlistManager.InsertSongAsync(e.To, 0);
+
+        var top = _playlistManager.GetCurrentPlaylist().FirstOrDefault()?.MediaFile ?? e.To;
+        CurrentTime = 0;
+        Duration = top.Metadata?.Duration ?? 0;
+        CurrentSong = top;
+        MarkCurrentlyPlaying();
+        await ApplyShuffleModeAsync();
+        RefreshCommandStates();
+    }
+
+    /// <summary>Shuffle mode (setting): the song after the current one is picked at random.</summary>
+    public bool ShuffleModeEnabled
+    {
+        get => ShuffleEnabled;
+        set => ShuffleEnabled = value;
+    }
+
+    private async Task ApplyShuffleModeAsync()
+    {
+        if (!ShuffleEnabled || _playlistManager == null)
+            return;
+
+        var count = _playlistManager.GetCurrentPlaylist().Count;
+        if (count <= 2)
+            return;
+
+        var pick = Random.Shared.Next(1, count);
+        if (pick != 1)
+            await _playlistManager.ReorderSongAsync(pick, 1);
     }
 
     /// <summary>Clears the queue (the song playing, if any, is kept).</summary>
@@ -633,12 +747,16 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         try
         {
+            if (_preloadedId == top.Id)
+                _preloadedId = null; // the controller drops the preload when it is played directly
+
             CurrentTime = 0;
             Duration = top.Metadata?.Duration ?? 0;
             CurrentSong = top;
             MarkCurrentlyPlaying();
-            RefreshCommandStates();
             await _mediaPlayerController.PlayAsync(top);
+            await ApplyShuffleModeAsync();
+            RefreshCommandStates();
         }
         catch (Exception ex)
         {
@@ -724,11 +842,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         IsPlaying = e.NewState == PlaybackState.Playing;
 
-        if (e.NewState == PlaybackState.Playing)
-        {
-            // The active player may have changed (crossfade swap)
-            OnPropertyChanged(nameof(ActiveMediaPlayer));
-        }
         
         if (e.NewState == PlaybackState.Error)
         {
@@ -1060,23 +1173,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     public void OpenSettings()
     {
-        try
-        {
-            Console.WriteLine($"[DEBUG] OpenSettings called - Thread: {System.Threading.Thread.CurrentThread.ManagedThreadId}");
-
-            // This will open the settings window
-            StatusMessage = "Opening Settings...";
-            Console.WriteLine("[DEBUG] About to send OpenSettingsMessage");
-
-            // Use ReactiveUI MessageBus to request window opening
-            ReactiveUI.MessageBus.Current.SendMessage(new Services.OpenSettingsMessage());
-            Console.WriteLine("[DEBUG] OpenSettingsMessage sent successfully");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[DEBUG] Exception in OpenSettings: {ex.Message}");
-            Console.WriteLine($"[DEBUG] Stack trace: {ex.StackTrace}");
-        }
+        StatusMessage = "Opening Settings...";
+        ReactiveUI.MessageBus.Current.SendMessage(new Services.OpenSettingsMessage());
     }
 
     /// <summary>Re-scans the media folder (changes arrive through the library events).</summary>
