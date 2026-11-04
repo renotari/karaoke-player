@@ -255,6 +255,17 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Double-click on a playlist song plays it right away.
+    /// </summary>
+    private void OnPlaylistDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm && vm.SelectedPlaylistItem != null)
+        {
+            vm.PlaySongNowCommand.Execute(vm.SelectedPlaylistItem);
+        }
+    }
+
+    /// <summary>
     /// Double-click on a catalog song adds it to the playlist as "next" (the default queue position).
     /// </summary>
     private void OnCatalogDoubleTapped(object? sender, TappedEventArgs e)

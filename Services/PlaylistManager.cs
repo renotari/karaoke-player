@@ -51,20 +51,23 @@ public class PlaylistManager : IPlaylistManager
         if (position != "next" && position != "end")
             throw new ArgumentException("Position must be 'next' or 'end'", nameof(position));
 
+        // "next" = right after the song at position 0 (the one playing)
+        var insertIndex = position == "next"
+            ? (_currentPlaylist.Count > 0 ? 1 : 0)
+            : _currentPlaylist.Count;
+
+        await InsertSongAsync(mediaFile, insertIndex);
+    }
+
+    public async Task InsertSongAsync(MediaFile mediaFile, int index)
+    {
+        if (mediaFile == null)
+            throw new ArgumentNullException(nameof(mediaFile));
+
+        var insertIndex = Math.Clamp(index, 0, _currentPlaylist.Count);
+
         // Check if it's a duplicate
         var isDuplicate = IsDuplicate(mediaFile);
-
-        // Determine insertion index
-        int insertIndex;
-        if (position == "next")
-        {
-            // Find the currently playing song (position 0) and insert after it
-            insertIndex = _currentPlaylist.Count > 0 ? 1 : 0;
-        }
-        else // "end"
-        {
-            insertIndex = _currentPlaylist.Count;
-        }
 
         // Create playlist item
         var playlistItem = new PlaylistItem
@@ -138,9 +141,18 @@ public class PlaylistManager : IPlaylistManager
         });
     }
 
-    public async Task ClearPlaylistAsync()
+    public async Task ClearPlaylistAsync(bool keepFirst = false)
     {
-        _currentPlaylist.Clear();
+        if (keepFirst && _currentPlaylist.Count > 0)
+        {
+            while (_currentPlaylist.Count > 1)
+                _currentPlaylist.RemoveAt(_currentPlaylist.Count - 1);
+        }
+        else
+        {
+            _currentPlaylist.Clear();
+        }
+        UpdateDuplicateFlags();
         await UpdatePositionsAsync();
 
         PlaylistChanged?.Invoke(this, new PlaylistChangedEventArgs
@@ -149,18 +161,19 @@ public class PlaylistManager : IPlaylistManager
         });
     }
 
-    public async Task ShufflePlaylistAsync()
+    public async Task ShufflePlaylistAsync(int startIndex = 0)
     {
-        if (_currentPlaylist.Count <= 1)
+        startIndex = Math.Max(0, startIndex);
+        if (_currentPlaylist.Count - startIndex <= 1)
             return;
 
         var random = new Random();
         var items = _currentPlaylist.ToList();
 
-        // Fisher-Yates shuffle
-        for (int i = items.Count - 1; i > 0; i--)
+        // Fisher-Yates shuffle of items[startIndex..]
+        for (int i = items.Count - 1; i > startIndex; i--)
         {
-            int j = random.Next(i + 1);
+            int j = random.Next(startIndex, i + 1);
             (items[i], items[j]) = (items[j], items[i]);
         }
 
@@ -365,7 +378,7 @@ public class PlaylistManager : IPlaylistManager
         {
             var savedData = new SavedPlaylistData
             {
-                Items = _currentPlaylist.Select(item => new SavedPlaylistItem
+                Items = _currentPlaylist.ToArray().Select(item => new SavedPlaylistItem
                 {
                     MediaFileId = item.MediaFileId,
                     Position = item.Position,

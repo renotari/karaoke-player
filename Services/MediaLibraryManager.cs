@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -16,6 +16,8 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
     private readonly IDbContextFactory _dbContextFactory;
     private FileSystemWatcher? _fileWatcher;
     private string? _monitoredDirectory;
+
+    public string? MonitoredDirectory => _monitoredDirectory;
     private readonly HashSet<string> _supportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".mp4", ".mkv", ".webm", ".mp3"

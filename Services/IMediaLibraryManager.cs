@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using KaraokePlayer.Models;
@@ -10,6 +10,11 @@ namespace KaraokePlayer.Services;
 /// </summary>
 public interface IMediaLibraryManager
 {
+    /// <summary>
+    /// The directory last scanned/monitored (null before the first scan)
+    /// </summary>
+    string? MonitoredDirectory { get; }
+
     /// <summary>
     /// Event raised when files are added to the library
     /// </summary>

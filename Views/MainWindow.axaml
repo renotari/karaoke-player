@@ -59,6 +59,10 @@
         <Menu Grid.Row="0">
             <MenuItem Header="_File">
                 <MenuItem Header="_Open Media Directory..." Command="{Binding OpenMediaDirectoryCommand}" />
+                <MenuItem Header="_Refresh Library" Command="{Binding RefreshLibraryCommand}" InputGesture="Ctrl+R" />
+                <Separator />
+                <MenuItem Header="Playlist _Composer..." Command="{Binding OpenPlaylistComposerCommand}" InputGesture="Ctrl+P" />
+                <Separator />
                 <MenuItem Header="_Exit" Command="{Binding ExitCommand}" />
             </MenuItem>
             <MenuItem Header="_View">
@@ -345,6 +349,7 @@
                     <!-- Playlist Items with Drag-Drop Support (virtualization enabled by default) -->
                     <ListBox Grid.Row="1"
                              ItemsSource="{Binding CurrentPlaylist}"
+                             DoubleTapped="OnPlaylistDoubleTapped"
                              SelectedItem="{Binding SelectedPlaylistItem}"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              TabIndex="3"
@@ -354,14 +359,40 @@
                                 <Grid ColumnDefinitions="Auto,80,*,Auto" 
                                       Margin="4"
                                       Background="Transparent">
-                                    
-                                    <!-- Drag Handle -->
-                                    <TextBlock Grid.Column="0"
-                                               Text="☰"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,8,0"
-                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
-                                               Cursor="Hand"/>
+
+                                    <Grid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Play now"
+                                                      Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).PlaySongNowCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                            <MenuItem Header="Play next"
+                                                      Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).PlaySongNextCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                            <Separator/>
+                                            <MenuItem Header="Move up"
+                                                      Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).MoveSongUpCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                            <MenuItem Header="Move down"
+                                                      Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).MoveSongDownCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                            <Separator/>
+                                            <MenuItem Header="Remove"
+                                                      Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).RemoveSongCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                        </ContextMenu>
+                                    </Grid.ContextMenu>
+
+                                    <!-- Queue position (▶ for the song playing) -->
+                                    <Panel Grid.Column="0" MinWidth="22" Margin="0,0,6,0" VerticalAlignment="Center">
+                                        <TextBlock Text="▶"
+                                                   Foreground="Green"
+                                                   HorizontalAlignment="Center"
+                                                   IsVisible="{Binding IsCurrentlyPlaying}"/>
+                                        <TextBlock Text="{Binding PlaylistItem.Position, Converter={x:Static vm:PlusOneConverter.Instance}}"
+                                                   HorizontalAlignment="Center"
+                                                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                                   IsVisible="{Binding !IsCurrentlyPlaying}"/>
+                                    </Panel>
 
                                     <!-- Thumbnail -->
                                     <Border Grid.Column="1" 

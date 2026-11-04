@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
@@ -24,6 +24,11 @@ public interface IPlaylistManager
     Task AddSongAsync(MediaFile mediaFile, string position = "next");
 
     /// <summary>
+    /// Inserts a song at an explicit index (clamped to the playlist bounds)
+    /// </summary>
+    Task InsertSongAsync(MediaFile mediaFile, int index);
+
+    /// <summary>
     /// Removes a song from the playlist by index
     /// </summary>
     /// <param name="index">The zero-based index of the song to remove</param>
@@ -39,12 +44,14 @@ public interface IPlaylistManager
     /// <summary>
     /// Clears all songs from the playlist
     /// </summary>
-    Task ClearPlaylistAsync();
+    /// <param name="keepFirst">Keep the first item (the song currently playing)</param>
+    Task ClearPlaylistAsync(bool keepFirst = false);
 
     /// <summary>
     /// Shuffles the playlist order
     /// </summary>
-    Task ShufflePlaylistAsync();
+    /// <param name="startIndex">Items before this index keep their place (e.g. 1 to keep the song playing)</param>
+    Task ShufflePlaylistAsync(int startIndex = 0);
 
     /// <summary>
     /// Checks if a song is already in the playlist (duplicate detection)

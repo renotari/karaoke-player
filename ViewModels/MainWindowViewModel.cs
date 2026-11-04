@@ -78,7 +78,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         // Initialize collections
         MediaFiles = new ObservableCollection<MediaFile>();
-        FilteredMediaFiles = new ObservableCollection<MediaFile>();
         CurrentPlaylist = new ObservableCollection<PlaylistItemViewModel>();
 
         // Setup reactive property for throttled search (KEEP ReactiveUI for this)
@@ -115,7 +114,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         // Initialize collections
         MediaFiles = new ObservableCollection<MediaFile>();
-        FilteredMediaFiles = new ObservableCollection<MediaFile>();
         CurrentPlaylist = new ObservableCollection<PlaylistItemViewModel>();
 
         // Setup reactive property for throttled search (KEEP ReactiveUI for this)
@@ -185,13 +183,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             // Load media library
             if (_mediaLibraryManager != null)
             {
-                var files = await _mediaLibraryManager.GetMediaFilesAsync();
-                foreach (var file in files)
-                {
-                    MediaFiles.Add(file);
-                    FilteredMediaFiles.Add(file);
-                }
-                MediaLibraryCount = files.Count;
+                await LoadLibraryAsync();
             }
 
             // Restore last session playlist
@@ -240,7 +232,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     // Collections
     public ObservableCollection<MediaFile> MediaFiles { get; }
-    public ObservableCollection<MediaFile> FilteredMediaFiles { get; }
+    /// <summary>
+    /// What the catalog shows. Replaced as a whole (not item by item) so that a
+    /// search over a large library does not raise thousands of change events.
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<MediaFile> _filteredMediaFiles = new();
     public ObservableCollection<PlaylistItemViewModel> CurrentPlaylist { get; }
 
     // Services (exposed for binding)
@@ -261,56 +258,40 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         try
         {
-            var startTime = DateTime.UtcNow;
-            FilteredMediaFiles.Clear();
-
             if (string.IsNullOrWhiteSpace(query))
             {
-                // Show all files when search is empty
-                foreach (var file in MediaFiles)
-                {
-                    FilteredMediaFiles.Add(file);
-                }
+                // Show the whole library when the search is empty
+                FilteredMediaFiles = new ObservableCollection<MediaFile>(MediaFiles);
                 return;
             }
 
-            // Use search engine if available, otherwise fallback to local filtering
+            var startTime = DateTime.UtcNow;
+
             if (_searchEngine != null)
             {
                 var results = await _searchEngine.SearchAsync(query);
-                foreach (var file in results)
-                {
-                    FilteredMediaFiles.Add(file);
-                }
 
-                // Add to search history
-                if (!string.IsNullOrWhiteSpace(query))
-                {
-                    await _searchEngine.AddToHistoryAsync(query);
-                }
+                // A newer query may have been typed while this one was running
+                if (query != SearchQuery && query != VideoModeSearchQuery)
+                    return;
+
+                FilteredMediaFiles = new ObservableCollection<MediaFile>(results);
+                await _searchEngine.AddToHistoryAsync(query);
             }
             else
             {
                 // Fallback: local filtering
-                var lowerQuery = query.ToLower();
                 var filtered = MediaFiles.Where(f =>
-                    (f.Metadata?.Artist?.ToLower().Contains(lowerQuery) ?? false) ||
-                    (f.Metadata?.Title?.ToLower().Contains(lowerQuery) ?? false) ||
-                    f.Filename.ToLower().Contains(lowerQuery)
-                );
-
-                foreach (var file in filtered)
-                {
-                    FilteredMediaFiles.Add(file);
-                }
+                    f.DisplayArtist.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
+                    f.DisplayTitle.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
+                    f.Filename.Contains(query, StringComparison.CurrentCultureIgnoreCase));
+                FilteredMediaFiles = new ObservableCollection<MediaFile>(filtered);
             }
 
-            // Log search performance
             var duration = DateTime.UtcNow - startTime;
-            if (duration.TotalMilliseconds > 300)
-            {
-                StatusMessage = $"Search completed in {duration.TotalMilliseconds:F0}ms (slow)";
-            }
+            StatusMessage = FilteredMediaFiles.Count == 0
+                ? $"No songs found for '{query}'"
+                : $"{FilteredMediaFiles.Count} songs found" + (duration.TotalMilliseconds > 300 ? $" ({duration.TotalMilliseconds:F0} ms)" : "");
         }
         catch (Exception ex)
         {
@@ -318,63 +299,75 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    // Note: No [RelayCommand] - called by wrapper commands (AddToPlaylistNext, etc.)
-    private async Task AddToPlaylist(MediaFile mediaFile, string position)
+    // ----- Library -------------------------------------------------------------
+
+    /// <summary>Catalog order: artist, then title (case-insensitive).</summary>
+    private static System.Collections.Generic.List<MediaFile> SortForDisplay(System.Collections.Generic.IEnumerable<MediaFile> files)
+        => files
+            .OrderBy(f => f.DisplayArtist, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(f => f.DisplayTitle, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+    private void SetLibrary(System.Collections.Generic.IEnumerable<MediaFile> files)
     {
+        MediaFiles.Clear();
+        foreach (var file in SortForDisplay(files))
+            MediaFiles.Add(file);
+        MediaLibraryCount = MediaFiles.Count;
+        ApplyFilter();
+    }
+
+    /// <summary>Re-applies the current search to the (changed) library.</summary>
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(SearchQuery))
+            FilteredMediaFiles = new ObservableCollection<MediaFile>(MediaFiles);
+        else
+            _ = Search(SearchQuery);
+    }
+
+    private async Task LoadLibraryAsync()
+    {
+        if (_mediaLibraryManager == null)
+            return;
+
+        var files = await _mediaLibraryManager.GetMediaFilesAsync();
+        SetLibrary(files);
+    }
+
+    // ----- Playlist: karaoke queue ---------------------------------------------
+    //
+    // CurrentPlaylist[0] is the song playing (while CurrentSong != null); the rest
+    // is the queue. A song that ends or is skipped leaves the list and goes to
+    // _history (used by Previous). With nothing playing, item 0 is the next song.
+    //
+    // The PlaylistManager is the single source of truth: commands ask it for a
+    // change and CurrentPlaylist is rebuilt from its PlaylistChanged event.
+
+    private readonly System.Collections.Generic.List<MediaFile> _history = new();
+    private const int MaxHistory = 100;
+
+    /// <summary>When false, playback stops at the end of each song (setting AutoPlayEnabled).</summary>
+    public bool AutoPlayEnabled { get; set; } = true;
+
+    private bool IsSongLoaded => CurrentSong != null;
+
+    private async Task AddToPlaylist(MediaFile? mediaFile, string position)
+    {
+        if (_playlistManager == null || mediaFile == null)
+            return;
+
         try
         {
-            if (_playlistManager != null)
-            {
-                // Optimistic update: Add to UI immediately for < 50ms response
-                var isDuplicate = _playlistManager.IsDuplicate(mediaFile);
-                var playlistItem = new PlaylistItem
-                {
-                    MediaFileId = mediaFile.Id,
-                    MediaFile = mediaFile,
-                    Position = position == "next" && CurrentPlaylist.Count > 0 ? 1 : CurrentPlaylist.Count,
-                    IsDuplicate = isDuplicate
-                };
+            var count = _playlistManager.GetCurrentPlaylist().Count;
+            var index = position == "next"
+                ? (IsSongLoaded ? Math.Min(1, count) : 0)
+                : count;
 
-                var viewModel = new PlaylistItemViewModel(playlistItem, mediaFile);
-
-                if (position == "next" && CurrentPlaylist.Count > 0)
-                {
-                    CurrentPlaylist.Insert(1, viewModel);
-                }
-                else
-                {
-                    CurrentPlaylist.Add(viewModel);
-                }
-
-                // Update service in background
-                await _playlistManager.AddSongAsync(mediaFile, position);
-
-                StatusMessage = $"Added '{mediaFile.DisplayName}' to playlist ({position})";
-            }
-            else
-            {
-                // Fallback without service
-                var playlistItem = new PlaylistItem
-                {
-                    MediaFileId = mediaFile.Id,
-                    MediaFile = mediaFile,
-                    Position = position == "next" && CurrentPlaylist.Count > 0 ? 1 : CurrentPlaylist.Count,
-                    IsDuplicate = CurrentPlaylist.Any(p => p.PlaylistItem.MediaFileId == mediaFile.Id)
-                };
-
-                var viewModel = new PlaylistItemViewModel(playlistItem, mediaFile);
-
-                if (position == "next" && CurrentPlaylist.Count > 0)
-                {
-                    CurrentPlaylist.Insert(1, viewModel);
-                }
-                else
-                {
-                    CurrentPlaylist.Add(viewModel);
-                }
-
-                StatusMessage = $"Added '{mediaFile.DisplayName}' to playlist ({position})";
-            }
+            await _playlistManager.InsertSongAsync(mediaFile, index);
+            StatusMessage = position == "next"
+                ? $"'{mediaFile.DisplayName}' will play next"
+                : $"Added '{mediaFile.DisplayName}' to the end of the playlist";
         }
         catch (Exception ex)
         {
@@ -392,24 +385,28 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private async Task AddToPlaylistFromVideoMode(MediaFile file) => await AddToPlaylist(file, "next");
 
     [RelayCommand]
-    private async Task RemoveSong(PlaylistItemViewModel item)
+    private async Task RemoveSong(PlaylistItemViewModel? item)
     {
+        if (_playlistManager == null || item == null)
+            return;
+
         try
         {
             var index = CurrentPlaylist.IndexOf(item);
-            if (index >= 0)
+            if (index < 0)
+                return;
+
+            if (index == 0 && IsSongLoaded)
             {
-                // Optimistic update: Remove from UI immediately
-                CurrentPlaylist.RemoveAt(index);
-
-                // Update service in background
-                if (_playlistManager != null)
-                {
-                    await _playlistManager.RemoveSongAsync(index);
-                }
-
-                StatusMessage = "Song removed from playlist";
+                // Removing the song that is playing = skip it
+                await AdvanceAsync(playNext: true);
             }
+            else
+            {
+                await _playlistManager.RemoveSongAsync(index);
+            }
+
+            StatusMessage = "Song removed from playlist";
         }
         catch (Exception ex)
         {
@@ -417,25 +414,90 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    // CanExecute methods for commands
-    private bool CanClearPlaylist() => CurrentPlaylist.Count > 0;
-    private bool CanShufflePlaylist() => CurrentPlaylist.Count > 1;
-    private bool CanPlay() => CurrentPlaylist.Count > 0;
+    /// <summary>Moves a queued song right after the one playing.</summary>
+    [RelayCommand]
+    private async Task PlaySongNext(PlaylistItemViewModel? item)
+    {
+        var index = item == null ? -1 : CurrentPlaylist.IndexOf(item);
+        var target = IsSongLoaded ? 1 : 0;
+        if (_playlistManager == null || index < 0 || index == target || (IsSongLoaded && index == 0))
+            return;
 
+        await _playlistManager.ReorderSongAsync(index, target);
+    }
+
+    /// <summary>Stops the current song and plays this one right away.</summary>
+    [RelayCommand]
+    private async Task PlaySongNow(PlaylistItemViewModel? item)
+    {
+        var index = item == null ? -1 : CurrentPlaylist.IndexOf(item);
+        if (_playlistManager == null || index < 0)
+            return;
+
+        if (index == 0)
+        {
+            if (!IsSongLoaded)
+                await PlayTopAsync();
+            return;
+        }
+
+        if (IsSongLoaded)
+        {
+            // The current song is done: drop it, the chosen one shifts by one
+            AddToHistory(CurrentSong!);
+            await _playlistManager.RemoveSongAsync(0);
+            index--;
+        }
+
+        if (index > 0)
+            await _playlistManager.ReorderSongAsync(index, 0);
+
+        await PlayTopAsync();
+    }
+
+    [RelayCommand]
+    private async Task MoveSongUp(PlaylistItemViewModel? item)
+    {
+        var index = item == null ? -1 : CurrentPlaylist.IndexOf(item);
+        var first = IsSongLoaded ? 1 : 0; // the song playing stays on top
+        if (_playlistManager == null || index <= first)
+            return;
+
+        await _playlistManager.ReorderSongAsync(index, index - 1);
+    }
+
+    [RelayCommand]
+    private async Task MoveSongDown(PlaylistItemViewModel? item)
+    {
+        var index = item == null ? -1 : CurrentPlaylist.IndexOf(item);
+        if (_playlistManager == null || index < 0 || index >= CurrentPlaylist.Count - 1 || (IsSongLoaded && index == 0))
+            return;
+
+        await _playlistManager.ReorderSongAsync(index, index + 1);
+    }
+
+    // CanExecute methods for commands
+    private bool CanClearPlaylist() => CurrentPlaylist.Count > (IsSongLoaded ? 1 : 0);
+    private bool CanShufflePlaylist() => CurrentPlaylist.Count - (IsSongLoaded ? 1 : 0) > 1;
+    private bool CanPlay() => CurrentPlaylist.Count > 0 || IsSongLoaded;
+
+    private void RefreshCommandStates()
+    {
+        ClearPlaylistCommand.NotifyCanExecuteChanged();
+        ShufflePlaylistCommand.NotifyCanExecuteChanged();
+        PlayCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Clears the queue (the song playing, if any, is kept).</summary>
     [RelayCommand(CanExecute = nameof(CanClearPlaylist))]
     private async Task ClearPlaylist()
     {
+        if (_playlistManager == null)
+            return;
+
         try
         {
-            // Optimistic update: Clear UI immediately
-            CurrentPlaylist.Clear();
-
-            // Update service in background
-            if (_playlistManager != null)
-            {
-                await _playlistManager.ClearPlaylistAsync();
-            }
-
+            await _playlistManager.ClearPlaylistAsync(keepFirst: IsSongLoaded);
             StatusMessage = "Playlist cleared";
         }
         catch (Exception ex)
@@ -444,29 +506,16 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>Shuffles the queue (the song playing, if any, stays first).</summary>
     [RelayCommand(CanExecute = nameof(CanShufflePlaylist))]
     private async Task ShufflePlaylist()
     {
+        if (_playlistManager == null)
+            return;
+
         try
         {
-            if (_playlistManager != null)
-            {
-                await _playlistManager.ShufflePlaylistAsync();
-                SyncPlaylistFromService();
-            }
-            else
-            {
-                // Fallback: local shuffle
-                var random = new Random();
-                var shuffled = CurrentPlaylist.OrderBy(x => random.Next()).ToList();
-                CurrentPlaylist.Clear();
-                for (int i = 0; i < shuffled.Count; i++)
-                {
-                    shuffled[i].PlaylistItem.Position = i;
-                    CurrentPlaylist.Add(shuffled[i]);
-                }
-            }
-
+            await _playlistManager.ShufflePlaylistAsync(startIndex: IsSongLoaded ? 1 : 0);
             StatusMessage = "Playlist shuffled";
         }
         catch (Exception ex)
@@ -475,71 +524,43 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
+    // ----- Transport ---------------------------------------------------------
+
+    /// <summary>Resumes a paused song, or starts the first song of the playlist.</summary>
     [RelayCommand(CanExecute = nameof(CanPlay))]
     private async Task Play()
     {
-        try
+        if (IsSongLoaded && !IsPlaying)
         {
-            if (_mediaPlayerController != null && CurrentPlaylist.Count > 0)
-            {
-                var firstSong = CurrentPlaylist[0].MediaFile;
-                if (firstSong != null)
-                {
-                    await _mediaPlayerController.PlayAsync(firstSong);
-                    CurrentSong = firstSong;
-                    IsPlaying = true;
+            _mediaPlayerController?.Resume();
+            StatusMessage = "Playing";
+            return;
+        }
 
-                    // Mark as currently playing
-                    CurrentPlaylist[0].IsCurrentlyPlaying = true;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Playback error: {ex.Message}";
-        }
+        if (!IsSongLoaded)
+            await PlayTopAsync();
     }
 
     [RelayCommand]
     private void Pause()
     {
-        try
+        if (IsPlaying)
         {
-            if (_mediaPlayerController != null)
-            {
-                if (IsPlaying)
-                {
-                    _mediaPlayerController.Pause();
-                    IsPlaying = false;
-                    StatusMessage = "Paused";
-                }
-                else
-                {
-                    _mediaPlayerController.Resume();
-                    IsPlaying = true;
-                    StatusMessage = "Playing";
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Error: {ex.Message}";
+            _mediaPlayerController?.Pause();
+            StatusMessage = "Paused";
         }
     }
 
     [RelayCommand]
-    private void PlayPause()
+    private async Task PlayPause()
     {
         if (IsPlaying)
-        {
             Pause();
-        }
         else
-        {
-            _ = Play();
-        }
+            await Play();
     }
 
+    /// <summary>Stops playback; the song stays on top of the playlist.</summary>
     [RelayCommand]
     private void Stop()
     {
@@ -548,14 +569,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _mediaPlayerController?.Stop();
             IsPlaying = false;
             CurrentTime = 0;
+            Duration = 0;
             CurrentSong = null;
-
-            // Clear currently playing indicator
-            foreach (var item in CurrentPlaylist)
-            {
-                item.IsCurrentlyPlaying = false;
-            }
-
+            MarkCurrentlyPlaying();
+            RefreshCommandStates();
             StatusMessage = "Stopped";
         }
         catch (Exception ex)
@@ -564,55 +581,126 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>Skips to the next song (the current one leaves the playlist).</summary>
     [RelayCommand]
-    private void Next()
+    private async Task Next()
     {
+        if (IsSongLoaded)
+            await AdvanceAsync(playNext: true);
+        else if (CurrentPlaylist.Count > 0)
+            await PlayTopAsync();
+    }
+
+    /// <summary>
+    /// Restarts the current song when it has been playing for a few seconds,
+    /// otherwise plays the previous song again.
+    /// </summary>
+    [RelayCommand]
+    private async Task Previous()
+    {
+        if (_playlistManager == null || _mediaPlayerController == null)
+            return;
+
+        if (IsSongLoaded && (CurrentTime > 3 || _history.Count == 0))
+        {
+            _mediaPlayerController.Seek(0);
+            return;
+        }
+
+        if (_history.Count == 0)
+            return;
+
+        var previous = _history[^1];
+        _history.RemoveAt(_history.Count - 1);
+
+        // The current song (if any) is pushed down to position 1: it plays next
+        await _playlistManager.InsertSongAsync(previous, 0);
+        await PlayTopAsync();
+    }
+
+    /// <summary>Plays CurrentPlaylist[0].</summary>
+    private async Task PlayTopAsync()
+    {
+        if (_mediaPlayerController == null || _playlistManager == null)
+            return;
+
+        var top = _playlistManager.GetCurrentPlaylist().FirstOrDefault()?.MediaFile;
+        if (top == null)
+        {
+            GoIdle();
+            return;
+        }
+
         try
         {
-            if (CurrentPlaylist.Count > 1)
-            {
-                // Remove current song and play next
-                var currentIndex = CurrentPlaylist.IndexOf(CurrentPlaylist.FirstOrDefault(p => p.IsCurrentlyPlaying) ?? CurrentPlaylist[0]);
-                if (currentIndex >= 0 && currentIndex < CurrentPlaylist.Count - 1)
-                {
-                    CurrentPlaylist[currentIndex].IsCurrentlyPlaying = false;
-                    var nextSong = CurrentPlaylist[currentIndex + 1];
-                    if (nextSong.MediaFile != null && _mediaPlayerController != null)
-                    {
-                        _ = _mediaPlayerController.PlayAsync(nextSong.MediaFile);
-                        CurrentSong = nextSong.MediaFile;
-                        nextSong.IsCurrentlyPlaying = true;
-                    }
-                }
-            }
+            CurrentTime = 0;
+            Duration = top.Metadata?.Duration ?? 0;
+            CurrentSong = top;
+            MarkCurrentlyPlaying();
+            RefreshCommandStates();
+            await _mediaPlayerController.PlayAsync(top);
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error: {ex.Message}";
+            StatusMessage = $"Playback error: {ex.Message}";
         }
     }
 
-    [RelayCommand]
-    private void Previous()
+    /// <summary>
+    /// The current song is finished (ended, skipped or failed): remove it from the
+    /// playlist and, if requested, start the next one.
+    /// </summary>
+    private async Task AdvanceAsync(bool playNext)
     {
-        try
+        if (_playlistManager == null)
+            return;
+
+        var finished = CurrentSong;
+        if (finished != null)
         {
-            var currentIndex = CurrentPlaylist.IndexOf(CurrentPlaylist.FirstOrDefault(p => p.IsCurrentlyPlaying) ?? CurrentPlaylist[0]);
-            if (currentIndex > 0)
+            AddToHistory(finished);
+            var list = _playlistManager.GetCurrentPlaylist();
+            if (list.Count > 0 && list[0].MediaFileId == finished.Id)
             {
-                CurrentPlaylist[currentIndex].IsCurrentlyPlaying = false;
-                var previousSong = CurrentPlaylist[currentIndex - 1];
-                if (previousSong.MediaFile != null && _mediaPlayerController != null)
-                {
-                    _ = _mediaPlayerController.PlayAsync(previousSong.MediaFile);
-                    CurrentSong = previousSong.MediaFile;
-                    previousSong.IsCurrentlyPlaying = true;
-                }
+                await _playlistManager.RemoveSongAsync(0);
             }
         }
-        catch (Exception ex)
+
+        if (playNext && _playlistManager.GetCurrentPlaylist().Count > 0)
         {
-            StatusMessage = $"Error: {ex.Message}";
+            await PlayTopAsync();
+        }
+        else
+        {
+            _mediaPlayerController?.Stop();
+            GoIdle();
+        }
+    }
+
+    private void GoIdle()
+    {
+        CurrentSong = null;
+        IsPlaying = false;
+        CurrentTime = 0;
+        Duration = 0;
+        MarkCurrentlyPlaying();
+        RefreshCommandStates();
+    }
+
+    private void AddToHistory(MediaFile file)
+    {
+        _history.Add(file);
+        if (_history.Count > MaxHistory)
+            _history.RemoveAt(0);
+    }
+
+    /// <summary>Flags CurrentPlaylist[0] as "now playing" while a song is loaded.</summary>
+    private void MarkCurrentlyPlaying()
+    {
+        for (int i = 0; i < CurrentPlaylist.Count; i++)
+        {
+            CurrentPlaylist[i].IsCurrentlyPlaying =
+                i == 0 && CurrentSong != null && CurrentPlaylist[i].MediaFile?.Id == CurrentSong.Id;
         }
     }
 
@@ -662,8 +750,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void HandleMediaEnded(MediaEndedEventArgs e)
     {
-        // Auto-play next song
-        Next();
+        _ = AdvanceAsync(playNext: AutoPlayEnabled);
     }
 
     private void OnPlaybackError(object? sender, PlaybackErrorEventArgs e)
@@ -671,17 +758,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void HandlePlaybackError(PlaybackErrorEventArgs e)
     {
+        var name = e.MediaFile?.DisplayName ?? CurrentSong?.DisplayName ?? "song";
         StatusMessage = $"Playback error: {e.ErrorMessage}";
-        
-        // Mark the problematic file in playlist
-        var errorItem = CurrentPlaylist.FirstOrDefault(p => p.MediaFile?.Id == e.MediaFile?.Id);
-        if (errorItem != null)
-        {
-            errorItem.PlaylistItem.Error = e.ErrorMessage;
-        }
+        _notificationService?.ShowError("Cannot play song", $"{name}: {e.ErrorMessage}. Skipping to the next song.");
 
-        // Skip to next song
-        Next();
+        // Skip the broken song
+        _ = AdvanceAsync(playNext: true);
     }
 
     private void OnPlaylistChanged(object? sender, PlaylistChangedEventArgs e)
@@ -695,16 +777,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void HandleFilesAdded(MediaFilesChangedEventArgs e)
     {
-        foreach (var file in e.Files)
-        {
-            MediaFiles.Add(file);
-            if (string.IsNullOrWhiteSpace(SearchQuery))
-            {
-                FilteredMediaFiles.Add(file);
-            }
-        }
-        MediaLibraryCount = MediaFiles.Count;
-        StatusMessage = $"{e.Files.Count} new songs added to library";
+        var known = new System.Collections.Generic.HashSet<string>(MediaFiles.Select(f => f.Id));
+        var added = e.Files.Where(f => known.Add(f.Id)).ToList();
+        if (added.Count == 0)
+            return;
+
+        SetLibrary(MediaFiles.Concat(added));
+        StatusMessage = $"{added.Count} new songs added to library";
     }
 
     private void OnFilesRemoved(object? sender, MediaFilesChangedEventArgs e)
@@ -712,16 +791,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void HandleFilesRemoved(MediaFilesChangedEventArgs e)
     {
-        foreach (var file in e.Files)
-        {
-            var existing = MediaFiles.FirstOrDefault(f => f.Id == file.Id);
-            if (existing != null)
-            {
-                MediaFiles.Remove(existing);
-                FilteredMediaFiles.Remove(existing);
-            }
-        }
-        MediaLibraryCount = MediaFiles.Count;
+        var removed = new System.Collections.Generic.HashSet<string>(e.Files.Select(f => f.Id));
+        SetLibrary(MediaFiles.Where(f => !removed.Contains(f.Id)));
         StatusMessage = $"{e.Files.Count} songs removed from library";
     }
 
@@ -730,21 +801,18 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void HandleFilesModified(MediaFilesChangedEventArgs e)
     {
+        var byId = MediaFiles.ToDictionary(f => f.Id);
         foreach (var file in e.Files)
         {
-            var existing = MediaFiles.FirstOrDefault(f => f.Id == file.Id);
-            if (existing != null)
+            if (byId.TryGetValue(file.Id, out var existing))
             {
-                var index = MediaFiles.IndexOf(existing);
-                MediaFiles[index] = file;
-
-                var filteredIndex = FilteredMediaFiles.IndexOf(existing);
-                if (filteredIndex >= 0)
-                {
-                    FilteredMediaFiles[filteredIndex] = file;
-                }
+                // The scanner sends entities without metadata: keep what we already have
+                // (the extractor is asked to refresh it)
+                file.Metadata ??= existing.Metadata;
+                byId[file.Id] = file;
             }
         }
+        SetLibrary(byId.Values);
         StatusMessage = $"{e.Files.Count} songs updated";
     }
 
@@ -790,15 +858,22 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (_playlistManager == null) return;
 
+        var selected = SelectedPlaylistItem?.PlaylistItem;
+
         CurrentPlaylist.Clear();
-        var servicePlaylist = _playlistManager.GetCurrentPlaylist();
-        foreach (var item in servicePlaylist)
+        foreach (var item in _playlistManager.GetCurrentPlaylist())
         {
             if (item.MediaFile != null)
             {
-                CurrentPlaylist.Add(new PlaylistItemViewModel(item, item.MediaFile));
+                var vm = new PlaylistItemViewModel(item, item.MediaFile);
+                CurrentPlaylist.Add(vm);
+                if (ReferenceEquals(item, selected))
+                    SelectedPlaylistItem = vm;
             }
         }
+
+        MarkCurrentlyPlaying();
+        RefreshCommandStates();
     }
 
     private void UpdateCurrentSongInfo()
@@ -972,6 +1047,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         StatusMessage = "Search focused";
     }
 
+    [RelayCommand]
     public void OpenPlaylistComposer()
     {
         // This will open the playlist composer window
@@ -1003,10 +1079,26 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public void RefreshLibrary()
+    /// <summary>Re-scans the media folder (changes arrive through the library events).</summary>
+    [RelayCommand]
+    public async Task RefreshLibrary()
     {
-        _ = InitializeAsync();
+        if (_mediaLibraryManager?.MonitoredDirectory is not { } directory)
+        {
+            StatusMessage = "No media folder to refresh";
+            return;
+        }
+
         StatusMessage = "Refreshing library...";
+        try
+        {
+            await Task.Run(() => _mediaLibraryManager.ScanDirectoryAsync(directory));
+            StatusMessage = $"Library refreshed - {MediaLibraryCount} songs";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Refresh failed: {ex.Message}";
+        }
     }
 
     public void ToggleDisplayMode()

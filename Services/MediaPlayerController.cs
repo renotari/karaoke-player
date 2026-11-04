@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -139,8 +139,10 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
                 // Create media from file path
                 var media = new Media(_libVLC, mediaFile.FilePath, FromType.FromPath);
                 
-                // Set media to active player
+                // Set media to active player (and release the previous one)
+                var previousMedia = activePlayer.Media;
                 activePlayer.Media = media;
+                previousMedia?.Dispose();
 
                 // Store current media reference
                 _currentMedia = mediaFile;
