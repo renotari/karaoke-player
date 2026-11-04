@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
@@ -126,11 +126,7 @@ public partial class App : Application
             Core.Initialize();
 
             // Set up database with performance optimizations
-            var userDataPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "KaraokePlayer"
-            );
-            Directory.CreateDirectory(userDataPath);
+            var userDataPath = AppPaths.Root;
 
             var dbPath = Path.Combine(userDataPath, "karaoke.db");
             
@@ -213,10 +209,7 @@ public partial class App : Application
                 return false;
 
             // Check if settings file exists
-            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var settingsPath = Path.Combine(appDataPath, "KaraokePlayer", "settings.json");
-            
-            return !File.Exists(settingsPath);
+            return !File.Exists(AppPaths.SettingsFile);
         }
         catch (Exception ex)
         {

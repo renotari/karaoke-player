@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using KaraokePlayer.Views;
 using KaraokePlayer.Services;
@@ -17,11 +17,7 @@ public class TestWelcomeDialog
             Console.WriteLine("Testing WelcomeDialog instantiation...");
 
             // Set up database
-            var userDataPath = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "KaraokePlayer"
-            );
-            System.IO.Directory.CreateDirectory(userDataPath);
+            var userDataPath = KaraokePlayer.Services.AppPaths.Root;
 
             // Create test factory for in-memory database
             var factory = new TestDbContextFactory();

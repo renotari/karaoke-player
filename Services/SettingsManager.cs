@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -20,11 +20,7 @@ public class SettingsManager : ReactiveObject, ISettingsManager
     public SettingsManager()
     {
         // Store settings in user's AppData directory
-        var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var appDirectory = Path.Combine(appDataPath, "KaraokePlayer");
-        Directory.CreateDirectory(appDirectory);
-        
-        _settingsFilePath = Path.Combine(appDirectory, "settings.json");
+        _settingsFilePath = AppPaths.SettingsFile;
         _currentSettings = CreateDefaultSettings();
     }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -21,11 +21,7 @@ public class LoggingService : ILoggingService
     public LoggingService()
     {
         // Store logs in application data directory
-        var appDataPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "KaraokePlayer",
-            "Logs"
-        );
+        var appDataPath = AppPaths.Logs;
 
         Directory.CreateDirectory(appDataPath);
         _logDirectory = appDataPath;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
@@ -40,8 +40,7 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
         _libVLC = libVLC;
 
         // Set up cache directory in user's app data folder
-        var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        _cacheDirectory = Path.Combine(appDataPath, "KaraokePlayer", "Thumbnails");
+        _cacheDirectory = AppPaths.Thumbnails;
 
         // Create cache directory if it doesn't exist
         if (!Directory.Exists(_cacheDirectory))

@@ -16,18 +16,36 @@ sealed class Program
         // Check if running in test mode
         if (args.Contains("--test"))
         {
-            RunTests().GetAwaiter().GetResult();
+            RunWithTemporaryDataDirectory(RunTests);
             return;
         }
 
         // Check if running unit tests specifically (Task 31)
         if (args.Contains("--unit-tests"))
         {
-            RunUnitTests().GetAwaiter().GetResult();
+            RunWithTemporaryDataDirectory(RunUnitTests);
             return;
         }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
+
+    /// <summary>
+    /// Tests must never touch the real user data (settings, database, logs):
+    /// point AppPaths to a temporary directory and delete it afterwards.
+    /// </summary>
+    private static void RunWithTemporaryDataDirectory(Func<Task> run)
+    {
+        var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "KaraokePlayerTests-" + Guid.NewGuid().ToString("N"));
+        Environment.SetEnvironmentVariable(Services.AppPaths.DataDirEnvironmentVariable, tempDir);
+        try
+        {
+            run().GetAwaiter().GetResult();
+        }
+        finally
+        {
+            try { System.IO.Directory.Delete(tempDir, recursive: true); } catch { /* best effort */ }
+        }
     }
 
     private static async Task RunTests()

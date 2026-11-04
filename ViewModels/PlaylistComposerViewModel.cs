@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -504,12 +504,7 @@ public partial class PlaylistComposerViewModel : ViewModelBase, IDisposable
             // Optionally save to file as well
             if (_window != null && !string.IsNullOrWhiteSpace(PlaylistName))
             {
-                var userDataPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "KaraokePlayer",
-                    "Playlists"
-                );
-                Directory.CreateDirectory(userDataPath);
+                var userDataPath = AppPaths.Playlists;
 
                 var filePath = Path.Combine(userDataPath, $"{PlaylistName}.m3u");
                 await SavePlaylistToFileAsync(filePath);

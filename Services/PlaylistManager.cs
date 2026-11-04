@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -33,12 +33,7 @@ public class PlaylistManager : IPlaylistManager
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         
         // Set up auto-save file path in user data directory
-        var userDataPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "KaraokePlayer"
-        );
-        Directory.CreateDirectory(userDataPath);
-        _autoSaveFilePath = Path.Combine(userDataPath, "current-playlist.json");
+        _autoSaveFilePath = AppPaths.CurrentPlaylistFile;
 
         _currentPlaylist = new ObservableCollection<PlaylistItem>();
         _currentPlaylist.CollectionChanged += (s, e) =>
