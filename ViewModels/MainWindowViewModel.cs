@@ -68,10 +68,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private bool _isControlHandleExpanded;
     
-    [ObservableProperty]
-    private string _videoModeSearchQuery = string.Empty;
     
-    private System.Timers.Timer? _handleCollapseTimer;
 
     // Design-time constructor for XAML preview
     public MainWindowViewModel()
@@ -137,10 +134,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         // Commands are auto-generated via RelayCommand attributes
         
-        // Initialize collapse timer
-        _handleCollapseTimer = new System.Timers.Timer(3000); // 3 seconds
-        _handleCollapseTimer.Elapsed += (s, e) => CollapseControlHandle();
-        _handleCollapseTimer.AutoReset = false;
+
     }
 
     private void SubscribeToServiceEvents()
@@ -297,7 +291,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 var results = await _searchEngine.SearchAsync(query);
 
                 // A newer query may have been typed while this one was running
-                if (query != SearchQuery && query != VideoModeSearchQuery)
+                if (query != SearchQuery)
                     return;
 
                 FilteredMediaFiles = new ObservableCollection<MediaFile>(results);
@@ -1027,7 +1021,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             // Collapse handle when exiting video mode
             IsControlHandleExpanded = false;
-            _handleCollapseTimer?.Stop();
         }
         
         StatusMessage = IsVideoMode ? "Video Mode enabled" : "Normal Mode enabled";
@@ -1039,10 +1032,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (!IsVideoMode) return;
 
         IsControlHandleExpanded = true;
-        
-        // Reset the auto-collapse timer
-        _handleCollapseTimer?.Stop();
-        _handleCollapseTimer?.Start();
     }
 
     [RelayCommand]
@@ -1050,12 +1039,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (!IsVideoMode) return;
 
-        // Use dispatcher to ensure UI thread access
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-        {
-            IsControlHandleExpanded = false;
-            _handleCollapseTimer?.Stop();
-        });
+        IsControlHandleExpanded = false;
     }
 
     private void LoadSampleData()
@@ -1329,7 +1313,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _disposables.Dispose();
-        _handleCollapseTimer?.Dispose();
     }
 }
 

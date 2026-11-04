@@ -314,48 +314,80 @@
 
                         <!-- Expanded Handle (Full Controls) -->
                         <Border x:Name="ExpandedHandle"
-                                Background="#E0000000"
+                                Background="#E8101010"
                                 IsVisible="{Binding IsControlHandleExpanded}"
-                                Padding="16,12">
-                            <Grid RowDefinitions="Auto,Auto,Auto">
-                        
-                                <!-- Collapse Button -->
-                                <Button Grid.Row="0"
-                                        Content="▼ Collapse"
-                                        HorizontalAlignment="Right"
-                                        Command="{Binding CollapseControlHandleCommand}"
-                                        Background="Transparent"
-                                        Foreground="White"
-                                        BorderThickness="0"
-                                        Margin="0,0,0,8"/>
+                                Padding="16,10">
+                            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,16,*">
 
-                                <!-- Quick Search -->
-                                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-                                    <TextBox Grid.Column="0"
-                                             Watermark="Quick Search..."
-                                             Text="{Binding VideoModeSearchQuery, Mode=TwoWay}"
-                                             Margin="0,0,8,0"/>
-                                    <Button Grid.Column="1"
-                                            Content="Search"
-                                            Command="{Binding SearchCommand}"
-                                            CommandParameter="{Binding VideoModeSearchQuery}"/>
+                                <!-- Header -->
+                                <Grid Grid.Row="0" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,8">
+                                    <TextBlock Grid.Column="0" Text="Quick Search" Foreground="White"
+                                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1" Content="⚙ Settings" Margin="0,0,8,0"
+                                            Command="{Binding OpenSettingsCommand}"/>
+                                    <Button Grid.Column="2" Content="Exit Video Mode" Margin="0,0,8,0"
+                                            Command="{Binding ToggleVideoModeCommand}"/>
+                                    <Button Grid.Column="3" Content="▼ Collapse"
+                                            Command="{Binding CollapseControlHandleCommand}"/>
                                 </Grid>
 
-                                <!-- Quick Actions -->
-                                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12">
-                                    <Button Content="📋 View Playlist"
-                                            Padding="12,6"
-                                            Background="#80FFFFFF"
-                                            ToolTip.Tip="View current playlist"/>
-                                    <Button Content="⚙ Settings"
-                                            Padding="12,6"
-                                            Background="#80FFFFFF"
-                                            ToolTip.Tip="Open settings"/>
-                                    <Button Content="Exit Video Mode"
-                                            Padding="12,6"
-                                            Background="#80FFFFFF"
-                                            Command="{Binding ToggleVideoModeCommand}"/>
-                                </StackPanel>
+                                <!-- Search box: same query as the catalog search -->
+                                <TextBox x:Name="QuickSearchTextBox"
+                                         Grid.Row="1" Grid.Column="0"
+                                         Watermark="Artist, title or file name... (double-click a result: plays next)"
+                                         Text="{Binding SearchQuery, Mode=TwoWay}"
+                                         Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="1" Grid.Column="2"
+                                           Text="{Binding CurrentPlaylist.Count, StringFormat='Playlist ({0})'}"
+                                           Foreground="White" VerticalAlignment="Center" Margin="0,0,0,8"/>
+
+                                <!-- Results -->
+                                <ListBox Grid.Row="2" Grid.Column="0"
+                                         Height="200"
+                                         ItemsSource="{Binding FilteredMediaFiles}"
+                                         SelectedItem="{Binding SelectedMediaFile}"
+                                         DoubleTapped="OnCatalogDoubleTapped">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid ColumnDefinitions="*,Auto,Auto" Background="Transparent">
+                                                <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
+                                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1" Content="Next" Padding="8,2" Margin="8,0,4,0"
+                                                        ToolTip.Tip="Play after the current song"
+                                                        Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).AddToPlaylistNextCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                                <Button Grid.Column="2" Content="End" Padding="8,2"
+                                                        ToolTip.Tip="Add to the end of the playlist"
+                                                        Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).AddToPlaylistEndCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <!-- Compact playlist -->
+                                <ListBox Grid.Row="2" Grid.Column="2"
+                                         Height="200"
+                                         ItemsSource="{Binding CurrentPlaylist}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent">
+                                                <Panel Grid.Column="0" MinWidth="22" Margin="0,0,6,0">
+                                                    <TextBlock Text="▶" Foreground="Green" IsVisible="{Binding IsCurrentlyPlaying}"/>
+                                                    <TextBlock Text="{Binding PlaylistItem.Position, Converter={x:Static vm:PlusOneConverter.Instance}}"
+                                                               IsVisible="{Binding !IsCurrentlyPlaying}"/>
+                                                </Panel>
+                                                <TextBlock Grid.Column="1" Text="{Binding MediaFile.DisplayName}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <Button Grid.Column="2" Content="✕" Padding="6,0"
+                                                        Background="Transparent" BorderThickness="0"
+                                                        ToolTip.Tip="Remove from playlist"
+                                                        Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).RemoveSongCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
                             </Grid>
                         </Border>
                     </Grid>

@@ -1,11 +1,11 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="500"
         x:Class="KaraokePlayer.Views.WelcomeDialog"
         Title="Welcome to Karaoke Player"
-        Width="600" Height="500"
+        Width="620" Height="540"
         WindowStartupLocation="CenterScreen"
         CanResize="False"
         Icon="/Assets/avalonia-logo.ico">
@@ -55,7 +55,7 @@
         <TextBlock Text="Select the folder where your karaoke and music files are stored." 
                    TextWrapping="Wrap" 
                    Margin="0,0,0,10"
-                   Foreground="#888"/>
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
         
         <Grid Margin="0,0,0,20">
           <Grid.ColumnDefinitions>
@@ -65,8 +65,8 @@
           
           <TextBox Grid.Column="0" 
                    Name="MediaDirectoryTextBox"
-                   Watermark="Select a directory..."
-                   IsReadOnly="True"
+                   Watermark="Type a folder path or use Browse..."
+                   TextChanged="OnDirectoryTextChanged"
                    Margin="0,0,10,0"/>
           <Button Grid.Column="1" 
                   Name="BrowseButton"
@@ -75,11 +75,11 @@
         </Grid>
 
         <!-- Tips Section -->
-        <Border BorderBrush="#333" 
+        <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
                 BorderThickness="1" 
                 CornerRadius="5" 
                 Padding="15"
-                Background="#1A1A1A">
+                Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
           <StackPanel>
             <TextBlock Text="Quick Tips" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,10"/>
             
@@ -100,7 +100,7 @@
             
             <StackPanel Orientation="Horizontal" Margin="0,5">
               <TextBlock Text="•" Margin="0,0,10,0"/>
-              <TextBlock Classes="tip" Text="Double-click songs to add them to your playlist"/>
+              <TextBlock Classes="tip" Text="Double-click a song to queue it next; right-click for more options"/>
             </StackPanel>
             
             <StackPanel Orientation="Horizontal" Margin="0,5">
@@ -124,7 +124,7 @@
           <TextBlock Name="ProgressDetails" 
                      Text="" 
                      FontSize="12" 
-                     Foreground="#888" 
+                     Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" 
                      Margin="0,5,0,0"/>
         </StackPanel>
       </StackPanel>
@@ -137,12 +137,12 @@
                 Spacing="10">
       <Button Name="CancelButton" 
               Content="Cancel" 
-              Width="100"
+              MinWidth="100"
               Click="OnCancelClick"/>
       <Button Name="ContinueButton" 
               Classes="primary"
               Content="Continue" 
-              Width="100"
+              MinWidth="120"
               IsEnabled="False"
               Click="OnContinueClick"/>
     </StackPanel>

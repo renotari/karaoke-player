@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -60,6 +60,22 @@ public partial class WelcomeDialog : Window
             {
                 continueButton.IsEnabled = true;
             }
+        }
+    }
+
+    /// <summary>The path can also be typed: Continue is enabled when it exists.</summary>
+    private void OnDirectoryTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_isScanning)
+            return;
+
+        var text = (sender as TextBox)?.Text?.Trim();
+        _selectedDirectory = string.IsNullOrEmpty(text) ? null : text;
+
+        var continueButton = this.FindControl<Button>("ContinueButton");
+        if (continueButton != null)
+        {
+            continueButton.IsEnabled = _selectedDirectory != null && Directory.Exists(_selectedDirectory);
         }
     }
 
@@ -160,8 +176,9 @@ public partial class WelcomeDialog : Window
 
         try
         {
-            // Perform the scan
-            await _mediaLibraryManager.ScanDirectoryAsync(_selectedDirectory!);
+            // Perform the scan off the UI thread (it walks the whole folder tree)
+            var directory = _selectedDirectory!;
+            await Task.Run(() => _mediaLibraryManager.ScanDirectoryAsync(directory));
 
             // Start monitoring for auto-refresh
             _mediaLibraryManager.StartMonitoring();
@@ -255,6 +272,10 @@ public partial class WelcomeDialog : Window
 
     private void OnScanProgress(object? sender, ScanProgressEventArgs e)
     {
+        // One event per file: refresh the UI only every 50 files
+        if (e.FilesProcessed % 50 != 0 && e.FilesProcessed != e.TotalFiles)
+            return;
+
         // Update progress on UI thread
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {

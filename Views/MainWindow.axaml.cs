@@ -169,6 +169,12 @@ public partial class MainWindow : Window
                 {
                     ApplyVideoModeLayout(vm.IsVideoMode);
                 }
+                else if (args.PropertyName == nameof(MainWindowViewModel.IsControlHandleExpanded) && vm.IsControlHandleExpanded)
+                {
+                    // Ready to type a song request
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        this.FindControl<TextBox>("QuickSearchTextBox")?.Focus());
+                }
             };
             ApplyVideoModeLayout(vm.IsVideoMode);
         }
