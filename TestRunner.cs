@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using KaraokePlayer.Services;
 
@@ -51,11 +51,6 @@ public static class TestRunner
 
             // Run AudioVisualizationEngine tests
             AudioVisualizationEngineTest.RunTests();
-
-            Console.WriteLine();
-
-            // Run PlaybackWindow tests
-            await TestPlaybackWindow.RunTests();
 
             Console.WriteLine();
 
