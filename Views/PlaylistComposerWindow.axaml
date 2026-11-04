@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:KaraokePlayer.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -141,14 +141,14 @@
                                     <StackPanel Grid.Column="1" 
                                                 Margin="8,0,0,0"
                                                 VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Metadata.Artist}"
+                                        <TextBlock Text="{Binding DisplayArtist}"
                                                    FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis"
-                                                   IsVisible="{Binding Metadata.Artist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                        <TextBlock Text="{Binding Metadata.Title}"
+                                                   IsVisible="{Binding DisplayArtist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                        <TextBlock Text="{Binding DisplayTitle}"
                                                    TextTrimming="CharacterEllipsis"
                                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
-                                        <TextBlock Text="{Binding Metadata.Duration, StringFormat='{}{0:mm\\:ss}'}"
+                                        <TextBlock Text="{Binding Metadata.Duration, Converter={x:Static vm:SecondsToTimeConverter.Instance}, FallbackValue=''}"
                                                    FontSize="11"
                                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
                                     </StackPanel>
@@ -207,7 +207,7 @@
                                        VerticalAlignment="Center"
                                        Margin="0,0,8,0"/>
                             <TextBlock Grid.Column="1"
-                                       Text="{Binding TotalDuration, StringFormat='{}{0:hh\\:mm\\:ss}'}"
+                                       Text="{Binding TotalDuration, Converter={x:Static vm:SecondsToTimeConverter.Instance}}"
                                        FontSize="16"
                                        FontWeight="Bold"
                                        VerticalAlignment="Center"
@@ -259,16 +259,16 @@
                                     <StackPanel Grid.Column="2" 
                                                 Margin="8,0,0,0"
                                                 VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Metadata.Artist}"
+                                        <TextBlock Text="{Binding DisplayArtist}"
                                                    FontWeight="SemiBold"
                                                    FontSize="12"
                                                    TextTrimming="CharacterEllipsis"
-                                                   IsVisible="{Binding Metadata.Artist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                        <TextBlock Text="{Binding Metadata.Title}"
+                                                   IsVisible="{Binding DisplayArtist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                        <TextBlock Text="{Binding DisplayTitle}"
                                                    FontSize="11"
                                                    TextTrimming="CharacterEllipsis"
                                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
-                                        <TextBlock Text="{Binding Metadata.Duration, StringFormat='{}{0:mm\\:ss}'}"
+                                        <TextBlock Text="{Binding Metadata.Duration, Converter={x:Static vm:SecondsToTimeConverter.Instance}, FallbackValue=''}"
                                                    FontSize="10"
                                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
                                     </StackPanel>

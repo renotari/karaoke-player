@@ -81,13 +81,16 @@ public partial class MainWindow : Window
 
                 var playlistComposerViewModel = new PlaylistComposerViewModel(
                     app.MediaLibraryManager,
-                    viewModel.GetPlaylistManager()
+                    viewModel.GetPlaylistManager()!,
+                    () => viewModel.CurrentSong != null
                 );
 
                 var playlistComposer = new PlaylistComposerWindow
                 {
                     DataContext = playlistComposerViewModel
                 };
+                // Needed for Close and for the M3U file pickers
+                playlistComposerViewModel.SetWindow(playlistComposer);
 
                 await playlistComposer.ShowDialog(this);
             });

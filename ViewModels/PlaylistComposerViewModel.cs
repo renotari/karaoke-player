@@ -59,17 +59,21 @@ public partial class PlaylistComposerViewModel : ViewModelBase, IDisposable
         SetupPropertyObservers();
     }
 
-    public PlaylistComposerViewModel(IMediaLibraryManager mediaLibraryManager, IPlaylistManager playlistManager)
+    // Tells whether a song is playing (it stays on top when the composed playlist is loaded)
+    private readonly Func<bool>? _isSongLoaded;
+
+    public PlaylistComposerViewModel(IMediaLibraryManager mediaLibraryManager, IPlaylistManager playlistManager, Func<bool>? isSongLoaded = null)
     {
         _mediaLibraryManager = mediaLibraryManager;
         _playlistManager = playlistManager;
+        _isSongLoaded = isSongLoaded;
         
         InitializeCollections();
         InitializeCommands();
         SetupPropertyObservers();
         
         // Load catalog files
-        LoadCatalogAsync().ConfigureAwait(false);
+        _ = LoadCatalogAsync();
     }
 
     private void InitializeCollections()
@@ -492,8 +496,8 @@ public partial class PlaylistComposerViewModel : ViewModelBase, IDisposable
 
         try
         {
-            // Clear current playlist
-            await _playlistManager.ClearPlaylistAsync();
+            // Replace the queue (the song playing, if any, keeps playing on top)
+            await _playlistManager.ClearPlaylistAsync(keepFirst: _isSongLoaded?.Invoke() == true);
 
             // Add all songs from composition to the playing playlist
             foreach (var file in ComposedPlaylist)
