@@ -308,7 +308,7 @@ Change style in Settings > Display > Visualization Style
 - **Media Engine**: LibVLCSharp 3.9
 - **Database**: SQLite with Entity Framework Core 9.0
 - **State Management**: ReactiveUI 22.2
-- **Metadata**: TagLib# 2.3, MediaInfo.Wrapper 21.9
+- **Metadata**: TagLib# 2.3
 - **Graphics**: SkiaSharp 3.119
 
 ## Performance

@@ -140,7 +140,7 @@
                                             ClipToBounds="True"
                                             Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
                                         <Panel>
-                                            <Image Source="{Binding ThumbnailPath}"
+                                            <Image Source="{Binding ThumbnailPath, Converter={x:Static vm:ThumbnailConverter.Instance}}"
                                                    Stretch="UniformToFill"
                                                    IsVisible="{Binding ThumbnailLoaded}"/>
                                             <TextBlock Text="🎵"
@@ -371,7 +371,7 @@
                                             ClipToBounds="True"
                                             Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
                                         <Panel>
-                                            <Image Source="{Binding MediaFile.ThumbnailPath}"
+                                            <Image Source="{Binding MediaFile.ThumbnailPath, Converter={x:Static vm:ThumbnailConverter.Instance}}"
                                                    Stretch="UniformToFill"
                                                    IsVisible="{Binding MediaFile.ThumbnailLoaded}"/>
                                             <TextBlock Text="🎵"

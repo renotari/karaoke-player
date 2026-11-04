@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -7,8 +8,17 @@ namespace KaraokePlayer.Models;
 /// <summary>
 /// Represents a media file in the library (video or audio)
 /// </summary>
-public class MediaFile
+public class MediaFile : INotifyPropertyChanged
 {
+    /// <summary>
+    /// Raised by <see cref="NotifyChanged"/> when background work (metadata,
+    /// thumbnail) updates this instance, so bound UI refreshes.
+    /// </summary>
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>Refreshes every binding on this instance.</summary>
+    public void NotifyChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
+
     [Key]
     public string Id { get; set; } = Guid.NewGuid().ToString();
 

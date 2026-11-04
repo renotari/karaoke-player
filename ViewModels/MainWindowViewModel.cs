@@ -19,6 +19,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly IMediaPlayerController? _mediaPlayerController;
     private readonly IMediaLibraryManager? _mediaLibraryManager;
     private readonly INotificationService? _notificationService;
+    private readonly IMetadataExtractor? _metadataExtractor;
+    private readonly IThumbnailGenerator? _thumbnailGenerator;
     private readonly CompositeDisposable _disposables = new();
 
     [ObservableProperty]
@@ -99,8 +101,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         IPlaylistManager playlistManager,
         IMediaPlayerController mediaPlayerController,
         IMediaLibraryManager mediaLibraryManager,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IMetadataExtractor? metadataExtractor = null,
+        IThumbnailGenerator? thumbnailGenerator = null)
     {
+        _metadataExtractor = metadataExtractor;
+        _thumbnailGenerator = thumbnailGenerator;
         _searchEngine = searchEngine ?? throw new ArgumentNullException(nameof(searchEngine));
         _playlistManager = playlistManager ?? throw new ArgumentNullException(nameof(playlistManager));
         _mediaPlayerController = mediaPlayerController ?? throw new ArgumentNullException(nameof(mediaPlayerController));
@@ -152,6 +158,16 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (_playlistManager != null)
         {
             _playlistManager.PlaylistChanged += OnPlaylistChanged;
+        }
+
+        if (_metadataExtractor != null)
+        {
+            _metadataExtractor.MetadataExtracted += OnMetadataExtracted;
+        }
+
+        if (_thumbnailGenerator != null)
+        {
+            _thumbnailGenerator.ThumbnailGenerated += OnThumbnailGenerated;
         }
 
         if (_mediaLibraryManager != null)
@@ -730,6 +746,44 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             }
         }
         StatusMessage = $"{e.Files.Count} songs updated";
+    }
+
+    private void OnMetadataExtracted(object? sender, MetadataExtractedEventArgs e)
+        => OnUiThread(() => UpdateAllInstances(e.MediaFile.Id, file =>
+        {
+            file.Metadata = e.Metadata;
+            file.MetadataLoaded = true;
+        }));
+
+    private void OnThumbnailGenerated(object? sender, ThumbnailGeneratedEventArgs e)
+        => OnUiThread(() => UpdateAllInstances(e.MediaFile.Id, file =>
+        {
+            file.ThumbnailPath = e.ThumbnailPath;
+            file.ThumbnailLoaded = true;
+        }));
+
+    /// <summary>
+    /// The same file can exist as different MediaFile instances (library list,
+    /// search results, playlist): update them all and refresh their bindings.
+    /// </summary>
+    private void UpdateAllInstances(string mediaFileId, Action<MediaFile> update)
+    {
+        var instances = new System.Collections.Generic.HashSet<MediaFile>(System.Collections.Generic.ReferenceEqualityComparer.Instance);
+        foreach (var f in MediaFiles) if (f.Id == mediaFileId) instances.Add(f);
+        foreach (var f in FilteredMediaFiles) if (f.Id == mediaFileId) instances.Add(f);
+        foreach (var p in CurrentPlaylist) if (p.MediaFile?.Id == mediaFileId) instances.Add(p.MediaFile);
+        if (CurrentSong?.Id == mediaFileId) instances.Add(CurrentSong);
+
+        foreach (var file in instances)
+        {
+            update(file);
+            file.NotifyChanged();
+        }
+
+        if (CurrentSong?.Id == mediaFileId)
+        {
+            UpdateCurrentSongInfo();
+        }
     }
 
     private void SyncPlaylistFromService()

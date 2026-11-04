@@ -12,7 +12,7 @@ Karaoke Player is a professional Windows karaoke and media player built with .NE
 - Media Engine: LibVLCSharp 3.9
 - Database: SQLite with Entity Framework Core 9.0
 - Graphics: SkiaSharp 3.119
-- Metadata: TagLib#, MediaInfo.Wrapper
+- Metadata: TagLib# (audio and video containers)
 
 ## Build and Development Commands
 
@@ -98,7 +98,7 @@ All services follow interface-based design located in the `Services/` directory:
 - `ISearchEngine` / `SearchEngine`: Optimized search across large catalogs with partial matching and history
 
 **Media Processing:**
-- `IMetadataExtractor` / `MetadataExtractor`: Extracts metadata using TagLib# and MediaInfo
+- `IMetadataExtractor` / `MetadataExtractor`: Extracts metadata using TagLib# (falls back to file name parsing)
 - `IThumbnailGenerator` / `ThumbnailGenerator`: Generates video thumbnails using LibVLC
 - `ICacheManager` / `CacheManager`: Manages thumbnail and metadata caching
 

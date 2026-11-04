@@ -26,6 +26,8 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
     // Thumbnail dimensions
     private const int ThumbnailWidth = 320;
     private const int ThumbnailHeight = 180;
+    private const int FramesToSkip = 3;
+    private const int MaxFramesToWait = 75;
 
     public event EventHandler<ThumbnailGeneratedEventArgs>? ThumbnailGenerated;
     public event EventHandler<ThumbnailGenerationFailedEventArgs>? ThumbnailGenerationFailed;
@@ -58,12 +60,8 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
 
         try
         {
-            // Create a media player for thumbnail extraction
-            using var mediaPlayer = new MediaPlayer(_libVLC);
             using var media = new Media(_libVLC, mediaFile.FilePath, FromType.FromPath);
-
-            // Parse media to get duration
-            await media.Parse(MediaParseOptions.ParseNetwork);
+            await media.Parse(MediaParseOptions.ParseLocal, timeout: 5000);
 
             var duration = media.Duration;
             if (duration <= 0)
@@ -71,28 +69,30 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
                 throw new Exception("Could not determine video duration");
             }
 
-            // Calculate 10% position
-            var capturePosition = (long)(duration * 0.1);
+            var (width, height) = GetThumbnailSize(media);
 
-            mediaPlayer.Media = media;
-            mediaPlayer.Play();
+            // Capture at 10% of the duration (skips black intros), without audio
+            var startSeconds = duration * 0.1 / 1000.0;
+            var frame = await CaptureFrameAsync(mediaFile.FilePath, startSeconds, width, height);
 
-            // Wait for player to start
-            await Task.Delay(100);
+            // Files with few keyframes can decode as plain grey after the seek:
+            // fall back to the beginning of the video
+            if (frame == null || !frame.Value.HasContent)
+            {
+                var fromStart = await CaptureFrameAsync(mediaFile.FilePath, 0, width, height);
+                if (fromStart != null && (frame == null || fromStart.Value.HasContent))
+                {
+                    frame = fromStart;
+                }
+            }
 
-            // Seek to 10% position
-            mediaPlayer.Time = capturePosition;
-            await Task.Delay(300); // Wait for seek to complete and frame to render
+            if (frame == null)
+            {
+                throw new Exception("No video frame decoded");
+            }
 
-            // Take snapshot - returns 0 on success, -1 on error
-            var result = mediaPlayer.TakeSnapshot(0, thumbnailPath, (uint)ThumbnailWidth, (uint)ThumbnailHeight);
-            
-            mediaPlayer.Stop();
+            SaveJpeg(frame.Value.Pixels, (int)width, (int)height, thumbnailPath);
 
-            // Wait a bit for the snapshot file to be written
-            await Task.Delay(500);
-
-            // Verify the file was created
             if (!File.Exists(thumbnailPath))
             {
                 throw new Exception("Thumbnail file was not created");
@@ -117,6 +117,143 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
 
             throw new Exception($"Failed to generate video thumbnail: {ex.Message}", ex);
         }
+    }
+
+    /// <summary>
+    /// Thumbnail size that fits ThumbnailWidth x ThumbnailHeight keeping the video aspect ratio.
+    /// </summary>
+    private static (uint Width, uint Height) GetThumbnailSize(Media media)
+    {
+        foreach (var track in media.Tracks)
+        {
+            if (track.TrackType == TrackType.Video && track.Data.Video.Width > 0 && track.Data.Video.Height > 0)
+            {
+                var video = track.Data.Video;
+                double w = video.Width, h = video.Height;
+                if (video.SarNum > 0 && video.SarDen > 0)
+                {
+                    w = w * video.SarNum / video.SarDen;
+                }
+
+                var scale = Math.Min(ThumbnailWidth / w, ThumbnailHeight / h);
+                // Even sizes are safer for the video scaler
+                var tw = Math.Max(2, (uint)(w * scale) & ~1u);
+                var th = Math.Max(2, (uint)(h * scale) & ~1u);
+                return (tw, th);
+            }
+        }
+
+        return (ThumbnailWidth, ThumbnailHeight);
+    }
+
+    /// <summary>
+    /// Decodes the media off-screen (LibVLC video callbacks: no window is created)
+    /// and returns a copy of an early frame as BGRA pixels.
+    /// </summary>
+    private async Task<(byte[] Pixels, bool HasContent)?> CaptureFrameAsync(string filePath, double startSeconds, uint width, uint height)
+    {
+        using var media = new Media(_libVLC, filePath, FromType.FromPath);
+        media.AddOption(":no-audio");
+        if (startSeconds > 0)
+        {
+            media.AddOption($":start-time={startSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        }
+
+        var pitch = width * 4;
+        var bufferSize = (int)(pitch * height);
+        var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(bufferSize);
+        var frameReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var framesDisplayed = 0;
+
+        // Keep the delegates referenced for the whole decode (they are called from native code)
+        MediaPlayer.LibVLCVideoLockCb lockCb = (opaque, planes) =>
+        {
+            System.Runtime.InteropServices.Marshal.WriteIntPtr(planes, buffer);
+            return IntPtr.Zero;
+        };
+        MediaPlayer.LibVLCVideoDisplayCb displayCb = (opaque, picture) =>
+        {
+            // Right after the start-time seek, frames can be uniform grey until the
+            // next keyframe: wait for a frame with some content (or give up after a while
+            // and keep the last one: the video itself may be a plain background).
+            var count = Interlocked.Increment(ref framesDisplayed);
+            if (count >= FramesToSkip && (HasContent(buffer, width, height, pitch) || count >= MaxFramesToWait))
+            {
+                frameReady.TrySetResult(true);
+            }
+        };
+
+        try
+        {
+            using var mediaPlayer = new MediaPlayer(media);
+            mediaPlayer.SetVideoFormat("RV32", width, height, pitch);
+            mediaPlayer.SetVideoCallbacks(lockCb, null, displayCb);
+            mediaPlayer.EndReached += (_, _) => frameReady.TrySetResult(framesDisplayed > 0);
+            mediaPlayer.EncounteredError += (_, _) => frameReady.TrySetResult(false);
+
+            if (!mediaPlayer.Play())
+            {
+                return null;
+            }
+
+            var completed = await Task.WhenAny(frameReady.Task, Task.Delay(8000));
+            var gotFrame = completed == frameReady.Task && frameReady.Task.Result;
+
+            // Stop on a worker thread: it must not run on a LibVLC callback thread
+            await Task.Run(() => mediaPlayer.Stop());
+
+            if (!gotFrame && framesDisplayed == 0)
+            {
+                return null;
+            }
+
+            var hasContent = HasContent(buffer, width, height, pitch);
+            var pixels = new byte[bufferSize];
+            System.Runtime.InteropServices.Marshal.Copy(buffer, pixels, 0, bufferSize);
+            return (pixels, hasContent);
+        }
+        finally
+        {
+            GC.KeepAlive(lockCb);
+            GC.KeepAlive(displayCb);
+            System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Cheap check on a grid of sampled pixels: false when the frame is (almost) a single color.
+    /// </summary>
+    private static bool HasContent(IntPtr buffer, uint width, uint height, uint pitch)
+    {
+        const int grid = 8;
+        int min = 255 * 3, max = 0;
+        for (int gy = 0; gy < grid; gy++)
+        {
+            for (int gx = 0; gx < grid; gx++)
+            {
+                var x = (int)(width * (gx + 0.5) / grid);
+                var y = (int)(height * (gy + 0.5) / grid);
+                var offset = y * (int)pitch + x * 4;
+                var b = System.Runtime.InteropServices.Marshal.ReadByte(buffer, offset);
+                var g = System.Runtime.InteropServices.Marshal.ReadByte(buffer, offset + 1);
+                var r = System.Runtime.InteropServices.Marshal.ReadByte(buffer, offset + 2);
+                var sum = r + g + b;
+                if (sum < min) min = sum;
+                if (sum > max) max = sum;
+            }
+        }
+        return max - min > 30;
+    }
+
+    private static void SaveJpeg(byte[] bgraPixels, int width, int height, string path)
+    {
+        var info = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque);
+        using var bitmap = new SKBitmap(info);
+        System.Runtime.InteropServices.Marshal.Copy(bgraPixels, 0, bitmap.GetPixels(), bgraPixels.Length);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+        using var stream = File.Create(path);
+        data.SaveTo(stream);
     }
 
     /// <summary>

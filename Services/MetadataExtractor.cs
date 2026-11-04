@@ -6,7 +6,6 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using KaraokePlayer.Models;
-using MediaInfo.DotNetWrapper;
 using Microsoft.EntityFrameworkCore;
 
 namespace KaraokePlayer.Services;
@@ -34,7 +33,8 @@ public class MetadataExtractor : IMetadataExtractor, IDisposable
     }
 
     /// <summary>
-    /// Extracts metadata from a video file using MediaInfo
+    /// Extracts metadata from a video file (MP4, MKV, WEBM) using TagLib#.
+    /// Artist/title fall back to the file name when the container has no tags.
     /// </summary>
     public async Task<MediaMetadata> ExtractVideoMetadataAsync(MediaFile mediaFile)
     {
@@ -43,72 +43,40 @@ public class MetadataExtractor : IMetadataExtractor, IDisposable
             MediaFileId = mediaFile.Id
         };
 
+        // File name is the fallback for artist/title in every case
+        var parsed = ParseFilename(Path.GetFileNameWithoutExtension(mediaFile.Filename));
+        metadata.Artist = parsed.Artist;
+        metadata.Title = parsed.Title;
+
         try
         {
-            var fileInfo = new FileInfo(mediaFile.FilePath);
-            metadata.FileSize = fileInfo.Length;
+            metadata.FileSize = new FileInfo(mediaFile.FilePath).Length;
 
-            using var mediaInfo = new MediaInfo.DotNetWrapper.MediaInfo();
-            mediaInfo.Open(mediaFile.FilePath);
+            using var tagFile = TagLib.File.Create(mediaFile.FilePath);
 
-            // Extract duration (in milliseconds, convert to seconds)
-            var durationStr = mediaInfo.Get(MediaInfo.DotNetWrapper.Enumerations.StreamKind.General, 0, "Duration");
-            if (double.TryParse(durationStr, out var durationMs))
+            metadata.Duration = tagFile.Properties.Duration.TotalSeconds;
+
+            if (tagFile.Properties.VideoWidth > 0 && tagFile.Properties.VideoHeight > 0)
             {
-                metadata.Duration = durationMs / 1000.0;
+                metadata.ResolutionWidth = tagFile.Properties.VideoWidth;
+                metadata.ResolutionHeight = tagFile.Properties.VideoHeight;
             }
 
-            // Extract resolution
-            var widthStr = mediaInfo.Get(MediaInfo.DotNetWrapper.Enumerations.StreamKind.Video, 0, "Width");
-            var heightStr = mediaInfo.Get(MediaInfo.DotNetWrapper.Enumerations.StreamKind.Video, 0, "Height");
-            if (int.TryParse(widthStr, out var width) && int.TryParse(heightStr, out var height))
-            {
-                metadata.ResolutionWidth = width;
-                metadata.ResolutionHeight = height;
-            }
+            var tagArtist = tagFile.Tag.FirstPerformer ?? tagFile.Tag.FirstAlbumArtist;
+            var tagTitle = tagFile.Tag.Title;
 
-            // Check for subtitles
-            var textStreamCount = mediaInfo.CountGet(MediaInfo.DotNetWrapper.Enumerations.StreamKind.Text);
-            metadata.HasSubtitles = textStreamCount > 0;
-
-            // Try to extract artist and title from video metadata
-            var artist = mediaInfo.Get(MediaInfo.DotNetWrapper.Enumerations.StreamKind.General, 0, "Performer");
-            var title = mediaInfo.Get(MediaInfo.DotNetWrapper.Enumerations.StreamKind.General, 0, "Title");
-            
-            if (string.IsNullOrWhiteSpace(artist) && string.IsNullOrWhiteSpace(title))
+            // Use container tags only when both are present: a lone title tag is
+            // often the file name or an encoder string
+            if (!string.IsNullOrWhiteSpace(tagArtist) && !string.IsNullOrWhiteSpace(tagTitle))
             {
-                // Fallback to filename parsing
-                var parsed = ParseFilename(Path.GetFileNameWithoutExtension(mediaFile.Filename));
-                metadata.Artist = parsed.Artist;
-                metadata.Title = parsed.Title;
+                metadata.Artist = tagArtist.Trim();
+                metadata.Title = tagTitle.Trim();
             }
-            else
-            {
-                metadata.Artist = artist ?? string.Empty;
-                metadata.Title = title ?? string.Empty;
-            }
-
-            mediaInfo.Close();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            // Fallback to filename parsing on error
-            var parsed = ParseFilename(Path.GetFileNameWithoutExtension(mediaFile.Filename));
-            metadata.Artist = parsed.Artist;
-            metadata.Title = parsed.Title;
-
-            // Try to at least get file size
-            try
-            {
-                var fileInfo = new FileInfo(mediaFile.FilePath);
-                metadata.FileSize = fileInfo.Length;
-            }
-            catch
-            {
-                // Ignore file size errors
-            }
-
-            throw new Exception($"Failed to extract video metadata: {ex.Message}", ex);
+            // Unreadable container: keep file size (if any) and the file-name fallback.
+            // Playback does not depend on this metadata.
         }
 
         return await Task.FromResult(metadata);

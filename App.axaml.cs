@@ -167,6 +167,11 @@ public partial class App : Application
             // Initialize audio visualization engine
             _audioVisualizationEngine = new AudioVisualizationEngine();
 
+            // Files that appear (or change) while the app is running also need
+            // metadata and a thumbnail
+            _mediaLibraryManager.FilesAdded += OnLibraryFilesChanged;
+            _mediaLibraryManager.FilesModified += OnLibraryFilesChanged;
+
             // Clear all error states on application startup (Requirement 18.13)
             _errorHandlingService.ClearAllErrors();
             
@@ -178,6 +183,15 @@ public partial class App : Application
             // The ViewModel will handle null services gracefully
             _loggingService?.LogCritical("Error initializing services", ex);
             Console.WriteLine($"Error initializing services: {ex.Message}");
+        }
+    }
+
+    private void OnLibraryFilesChanged(object? sender, MediaFilesChangedEventArgs e)
+    {
+        foreach (var file in e.Files)
+        {
+            _metadataExtractor?.QueueForExtraction(file);
+            _thumbnailGenerator?.QueueForGeneration(file);
         }
     }
 
@@ -193,7 +207,9 @@ public partial class App : Application
                 _playlistManager,
                 _mediaPlayerController,
                 _mediaLibraryManager,
-                _notificationService
+                _notificationService,
+                _metadataExtractor,
+                _thumbnailGenerator
             );
         }
 

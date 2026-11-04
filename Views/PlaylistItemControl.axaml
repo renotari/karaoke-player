@@ -85,7 +85,7 @@
                     CornerRadius="2"
                     Margin="0,0,8,0"
                     Background="#1E1E1E">
-                <Image Source="{Binding ThumbnailPath}"
+                <Image Source="{Binding ThumbnailPath, Converter={x:Static vm:ThumbnailConverter.Instance}}"
                        Stretch="UniformToFill"
                        IsVisible="{Binding ThumbnailPath, Converter={x:Static ObjectConverters.IsNotNull}}"/>
             </Border>
