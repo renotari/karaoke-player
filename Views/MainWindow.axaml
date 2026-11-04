@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:KaraokePlayer.ViewModels"
         xmlns:views="using:KaraokePlayer.Views"
@@ -20,6 +20,7 @@
 
     <Window.Resources>
         <vm:PlayPauseConverter x:Key="PlayPauseConverter"/>
+        <vm:SecondsToTimeConverter x:Key="SecondsToTime"/>
     </Window.Resources>
 
     <Window.Styles>
@@ -81,10 +82,11 @@
         </Menu>
 
         <!-- Main Content Area - Normal Mode (Three Panes) -->
-        <Grid Grid.Row="1" ColumnDefinitions="300,5,*,5,300" IsVisible="{Binding !IsVideoMode}">
+        <Grid x:Name="MainContentGrid" Grid.Row="1" ColumnDefinitions="300,5,*,5,300">
             
             <!-- Left Pane: Media Catalog with Search -->
-            <Border Grid.Column="0" 
+            <Border Grid.Column="0"
+                    IsVisible="{Binding !IsVideoMode}"
                     BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" 
                     BorderThickness="0,0,1,0"
                     Padding="8">
@@ -119,6 +121,7 @@
                     <!-- Media Catalog List with Virtualization (enabled by default in Avalonia) -->
                     <ListBox Grid.Row="2"
                              ItemsSource="{Binding FilteredMediaFiles}"
+                             DoubleTapped="OnCatalogDoubleTapped"
                              SelectedItem="{Binding SelectedMediaFile}"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              TabIndex="2"
@@ -152,14 +155,15 @@
                                     <StackPanel Grid.Column="1" 
                                                 Margin="8,0,0,0"
                                                 VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Metadata.Artist}"
+                                        <TextBlock Text="{Binding DisplayArtist}"
                                                    FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis"
-                                                   IsVisible="{Binding Metadata.Artist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                        <TextBlock Text="{Binding Metadata.Title}"
+                                                   IsVisible="{Binding DisplayArtist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                        <TextBlock Text="{Binding DisplayTitle}"
                                                    TextTrimming="CharacterEllipsis"
                                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
-                                        <TextBlock Text="{Binding Metadata.Duration, StringFormat='{}{0:mm\\:ss}'}"
+                                        <TextBlock Text="{Binding Metadata.Duration, Converter={StaticResource SecondsToTime}, FallbackValue=''}"
+                                                   IsVisible="{Binding MetadataLoaded}"
                                                    FontSize="11"
                                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
                                     </StackPanel>
@@ -183,45 +187,146 @@
             </Border>
 
             <!-- Grid Splitter (Left) -->
-            <GridSplitter Grid.Column="1" 
+            <GridSplitter Grid.Column="1"
+                          IsVisible="{Binding !IsVideoMode}"
                           ResizeDirection="Columns"
                           Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"/>
 
-            <!-- Center Pane: Video Output Area -->
-            <Border Grid.Column="2" 
+            <!-- Center Pane: Video Output Area (also used, alone, in Video Mode) -->
+            <Border Grid.Column="2"
                     Background="Black"
                     Padding="0">
-                <Grid>
-                    <!-- Video Player Placeholder -->
-                    <Border Background="Black">
-                        <TextBlock Text="Video Output Area"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Foreground="White"
-                                   FontSize="24"
-                                   IsVisible="{Binding !IsPlaying}"/>
-                    </Border>
+                <Grid RowDefinitions="*,Auto">
+                    <Panel Grid.Row="0" Background="Black">
+                        <!-- Waiting screen (nothing playing) -->
+                        <StackPanel HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Spacing="8"
+                                    IsVisible="{Binding IsIdle}">
+                            <TextBlock Text="🎤"
+                                       FontSize="64"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Waiting for the next song"
+                                       Foreground="White"
+                                       FontSize="24"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
 
-                    <!-- Maximize Button -->
-                    <Button Content="⛶"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Top"
-                            Margin="8"
-                            Padding="8,4"
-                            ToolTip.Tip="Maximize Video"
-                            Background="#80000000"
-                            Foreground="White"
-                            Command="{Binding ToggleVideoModeCommand}"/>
+                        <!-- Now playing (audio files) -->
+                        <StackPanel HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Spacing="8"
+                                    Margin="24"
+                                    IsVisible="{Binding IsAudioContent}">
+                            <TextBlock Text="🎵"
+                                       FontSize="64"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="{Binding CurrentSong.DisplayTitle, FallbackValue=''}"
+                                       Foreground="White"
+                                       FontSize="32"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="{Binding CurrentSong.DisplayArtist, FallbackValue=''}"
+                                       Foreground="#CCFFFFFF"
+                                       FontSize="22"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- Video surface (LibVLC renders into this native window).
+                             It is always part of the visual tree so its native handle exists
+                             before playback starts; only its visibility changes. Avalonia
+                             controls cannot be drawn on top of it. -->
+                        <views:EmbeddedVideoView x:Name="VideoView"
+                                                 MediaPlayer="{Binding ActiveMediaPlayer}"
+                                                 IsVisible="{Binding IsVideoContent}"/>
+                    </Panel>
+
+                    <!-- Collapsible Control Handle at Bottom -->
+                    <Grid Grid.Row="1" IsVisible="{Binding IsVideoMode}">
+                        <!-- Collapsed Handle (Small Bar) -->
+                        <Border x:Name="CollapsedHandle"
+                                Height="30"
+                                Background="#80000000"
+                                IsVisible="{Binding !IsControlHandleExpanded}">
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Spacing="8">
+                                <TextBlock Text="▲"
+                                           Foreground="White"
+                                           FontSize="14"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="Quick Search &amp; Controls"
+                                           Foreground="White"
+                                           FontSize="12"
+                                           Opacity="0.7"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Expanded Handle (Full Controls) -->
+                        <Border x:Name="ExpandedHandle"
+                                Background="#E0000000"
+                                IsVisible="{Binding IsControlHandleExpanded}"
+                                Padding="16,12">
+                            <Grid RowDefinitions="Auto,Auto,Auto">
+                        
+                                <!-- Collapse Button -->
+                                <Button Grid.Row="0"
+                                        Content="▼ Collapse"
+                                        HorizontalAlignment="Right"
+                                        Command="{Binding CollapseControlHandleCommand}"
+                                        Background="Transparent"
+                                        Foreground="White"
+                                        BorderThickness="0"
+                                        Margin="0,0,0,8"/>
+
+                                <!-- Quick Search -->
+                                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+                                    <TextBox Grid.Column="0"
+                                             Watermark="Quick Search..."
+                                             Text="{Binding VideoModeSearchQuery, Mode=TwoWay}"
+                                             Margin="0,0,8,0"/>
+                                    <Button Grid.Column="1"
+                                            Content="Search"
+                                            Command="{Binding SearchCommand}"
+                                            CommandParameter="{Binding VideoModeSearchQuery}"/>
+                                </Grid>
+
+                                <!-- Quick Actions -->
+                                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12">
+                                    <Button Content="📋 View Playlist"
+                                            Padding="12,6"
+                                            Background="#80FFFFFF"
+                                            ToolTip.Tip="View current playlist"/>
+                                    <Button Content="⚙ Settings"
+                                            Padding="12,6"
+                                            Background="#80FFFFFF"
+                                            ToolTip.Tip="Open settings"/>
+                                    <Button Content="Exit Video Mode"
+                                            Padding="12,6"
+                                            Background="#80FFFFFF"
+                                            Command="{Binding ToggleVideoModeCommand}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
                 </Grid>
             </Border>
 
             <!-- Grid Splitter (Right) -->
-            <GridSplitter Grid.Column="3" 
+            <GridSplitter Grid.Column="3"
+                          IsVisible="{Binding !IsVideoMode}"
                           ResizeDirection="Columns"
                           Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"/>
 
             <!-- Right Pane: Current Playlist -->
-            <Border Grid.Column="4" 
+            <Border Grid.Column="4"
+                    IsVisible="{Binding !IsVideoMode}"
                     BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" 
                     BorderThickness="1,0,0,0"
                     Padding="8">
@@ -281,12 +386,12 @@
                                     <StackPanel Grid.Column="2" 
                                                 Margin="8,0,0,0"
                                                 VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding MediaFile.Metadata.Artist}"
+                                        <TextBlock Text="{Binding MediaFile.DisplayArtist}"
                                                    FontWeight="SemiBold"
                                                    FontSize="12"
                                                    TextTrimming="CharacterEllipsis"
-                                                   IsVisible="{Binding MediaFile.Metadata.Artist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                        <TextBlock Text="{Binding MediaFile.Metadata.Title}"
+                                                   IsVisible="{Binding MediaFile.DisplayArtist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                        <TextBlock Text="{Binding MediaFile.DisplayTitle}"
                                                    FontSize="11"
                                                    TextTrimming="CharacterEllipsis"
                                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
@@ -338,111 +443,6 @@
                     </StackPanel>
                 </Grid>
             </Border>
-        </Grid>
-
-        <!-- Video Mode - Maximized Video with Collapsible Control Handle -->
-        <Grid Grid.Row="1" IsVisible="{Binding IsVideoMode}">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-
-            <!-- Full-Screen Video Area -->
-            <Border Grid.Row="0" Background="Black">
-                <Grid>
-                    <!-- Video Player Placeholder -->
-                    <Border Background="Black">
-                        <TextBlock Text="Video Mode - Full Screen"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Foreground="White"
-                                   FontSize="32"
-                                   IsVisible="{Binding !IsPlaying}"/>
-                    </Border>
-
-                    <!-- Exit Video Mode Button (Top Right) -->
-                    <Button Content="⛶"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Top"
-                            Margin="8"
-                            Padding="8,4"
-                            ToolTip.Tip="Exit Video Mode"
-                            Background="#80000000"
-                            Foreground="White"
-                            Command="{Binding ToggleVideoModeCommand}"/>
-                </Grid>
-            </Border>
-
-            <!-- Collapsible Control Handle at Bottom -->
-            <Grid Grid.Row="1">
-                <!-- Collapsed Handle (Small Bar) -->
-                <Border x:Name="CollapsedHandle"
-                        Height="30"
-                        Background="#80000000"
-                        IsVisible="{Binding !IsControlHandleExpanded}">
-                    <Grid>
-                        <TextBlock Text="▲"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Foreground="White"
-                                   FontSize="16"/>
-                        <TextBlock Text="Quick Search &amp; Controls"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,0,0"
-                                   Foreground="White"
-                                   FontSize="12"
-                                   Opacity="0.7"/>
-                    </Grid>
-                </Border>
-
-                <!-- Expanded Handle (Full Controls) -->
-                <Border x:Name="ExpandedHandle"
-                        Background="#E0000000"
-                        IsVisible="{Binding IsControlHandleExpanded}"
-                        Padding="16,12">
-                    <Grid RowDefinitions="Auto,Auto,Auto">
-                        
-                        <!-- Collapse Button -->
-                        <Button Grid.Row="0"
-                                Content="▼ Collapse"
-                                HorizontalAlignment="Right"
-                                Command="{Binding CollapseControlHandleCommand}"
-                                Background="Transparent"
-                                Foreground="White"
-                                BorderThickness="0"
-                                Margin="0,0,0,8"/>
-
-                        <!-- Quick Search -->
-                        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-                            <TextBox Grid.Column="0"
-                                     Watermark="Quick Search..."
-                                     Text="{Binding VideoModeSearchQuery, Mode=TwoWay}"
-                                     Margin="0,0,8,0"/>
-                            <Button Grid.Column="1"
-                                    Content="Search"
-                                    Command="{Binding SearchCommand}"
-                                    CommandParameter="{Binding VideoModeSearchQuery}"/>
-                        </Grid>
-
-                        <!-- Quick Actions -->
-                        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12">
-                            <Button Content="📋 View Playlist"
-                                    Padding="12,6"
-                                    Background="#80FFFFFF"
-                                    ToolTip.Tip="View current playlist"/>
-                            <Button Content="⚙ Settings"
-                                    Padding="12,6"
-                                    Background="#80FFFFFF"
-                                    ToolTip.Tip="Open settings"/>
-                            <Button Content="Exit Video Mode"
-                                    Padding="12,6"
-                                    Background="#80FFFFFF"
-                                    Command="{Binding ToggleVideoModeCommand}"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
-            </Grid>
         </Grid>
 
         <!-- Playback Controls -->
@@ -501,11 +501,11 @@
                             IsTabStop="True"/>
                     <Grid ColumnDefinitions="Auto,*,Auto">
                         <TextBlock Grid.Column="0" 
-                                   Text="{Binding CurrentTime, StringFormat='{}{0:mm\\:ss}'}"
+                                   Text="{Binding CurrentTime, Converter={StaticResource SecondsToTime}}"
                                    FontSize="11"
                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
                         <TextBlock Grid.Column="2" 
-                                   Text="{Binding Duration, StringFormat='{}{0:mm\\:ss}'}"
+                                   Text="{Binding Duration, Converter={StaticResource SecondsToTime}}"
                                    FontSize="11"
                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
                     </Grid>
@@ -516,11 +516,19 @@
                             Orientation="Horizontal" 
                             Spacing="8"
                             VerticalAlignment="Center">
+                    <Button Content="⛶"
+                            Width="40"
+                            Height="40"
+                            FontSize="16"
+                            ToolTip.Tip="Video Mode on/off (Esc to exit)"
+                            Command="{Binding ToggleVideoModeCommand}"
+                            TabIndex="14"/>
                     <Button Content="🔊"
                             Width="40"
                             Height="40"
                             FontSize="16"
                             ToolTip.Tip="Mute/Unmute (M)"
+                            Command="{Binding ToggleMuteCommand}"
                             TabIndex="15"/>
                     <Slider Value="{Binding Volume}"
                             Minimum="0"

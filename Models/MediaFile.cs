@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -38,6 +38,32 @@ public class MediaFile
     // Timestamps
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastModified { get; set; }
+
+    // Display helpers (not stored): use metadata when available,
+    // otherwise fall back to what can be parsed from the file name.
+
+    [NotMapped]
+    public string DisplayArtist =>
+        !string.IsNullOrWhiteSpace(Metadata?.Artist)
+            ? Metadata!.Artist
+            : KaraokePlayer.Services.FilenameParser.ParseWithExtension(Filename).Artist;
+
+    [NotMapped]
+    public string DisplayTitle
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Metadata?.Title))
+                return Metadata!.Title;
+            var parsed = KaraokePlayer.Services.FilenameParser.ParseWithExtension(Filename).Title;
+            return string.IsNullOrWhiteSpace(parsed) ? Filename : parsed;
+        }
+    }
+
+    /// <summary>"Artist - Title", or just the title when the artist is unknown.</summary>
+    [NotMapped]
+    public string DisplayName =>
+        string.IsNullOrWhiteSpace(DisplayArtist) ? DisplayTitle : $"{DisplayArtist} - {DisplayTitle}";
 }
 
 public enum MediaType

@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
@@ -36,7 +36,7 @@ public partial class PlaybackWindow : Window
         if (DataContext is PlaybackWindowViewModel viewModel)
         {
             // Get the VideoView control and bind it to the ViewModel
-            var videoView = this.FindControl<VideoView>("VideoView");
+            var videoView = this.FindControl<EmbeddedVideoView>("VideoView");
             if (videoView != null && viewModel.MediaPlayer != null)
             {
                 videoView.MediaPlayer = viewModel.MediaPlayer;

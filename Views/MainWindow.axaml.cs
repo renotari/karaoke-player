@@ -1,4 +1,4 @@
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -214,6 +214,55 @@ public partial class MainWindow : Window
 
         // Find the search text box for focus management
         _searchTextBox = this.FindControl<TextBox>("SearchTextBox");
+
+        // Video Mode: collapse the side columns so the video takes the whole window
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(MainWindowViewModel.IsVideoMode))
+                {
+                    ApplyVideoModeLayout(vm.IsVideoMode);
+                }
+            };
+            ApplyVideoModeLayout(vm.IsVideoMode);
+        }
+    }
+
+    // Column widths saved before entering Video Mode (keeps sizes set with the splitters)
+    private GridLength[]? _savedColumnWidths;
+
+    private void ApplyVideoModeLayout(bool isVideoMode)
+    {
+        var grid = this.FindControl<Grid>("MainContentGrid");
+        if (grid == null || grid.ColumnDefinitions.Count != 5)
+            return;
+
+        int[] sideColumns = { 0, 1, 3, 4 };
+
+        if (isVideoMode)
+        {
+            _savedColumnWidths ??= Array.ConvertAll(sideColumns, i => grid.ColumnDefinitions[i].Width);
+            foreach (var i in sideColumns)
+                grid.ColumnDefinitions[i].Width = new GridLength(0);
+        }
+        else if (_savedColumnWidths != null)
+        {
+            for (int k = 0; k < sideColumns.Length; k++)
+                grid.ColumnDefinitions[sideColumns[k]].Width = _savedColumnWidths[k];
+            _savedColumnWidths = null;
+        }
+    }
+
+    /// <summary>
+    /// Double-click on a catalog song adds it to the playlist as "next" (the default queue position).
+    /// </summary>
+    private void OnCatalogDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm && vm.SelectedMediaFile != null)
+        {
+            vm.AddToPlaylistNextCommand.Execute(vm.SelectedMediaFile);
+        }
     }
 
     /// <summary>

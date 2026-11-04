@@ -82,7 +82,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         // Setup reactive property for throttled search (KEEP ReactiveUI for this)
         var throttledSearch = this.WhenAnyValue(x => x.SearchQuery)
             .Throttle(TimeSpan.FromMilliseconds(300))
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(UiScheduler)
             .Subscribe(async query => await Search(query));
         _disposables.Add(throttledSearch);
 
@@ -115,7 +115,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         // Setup reactive property for throttled search (KEEP ReactiveUI for this)
         var throttledSearch = this.WhenAnyValue(x => x.SearchQuery)
             .Throttle(TimeSpan.FromMilliseconds(300))
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(UiScheduler)
             .Subscribe(async query => await Search(query));
         _disposables.Add(throttledSearch);
 
@@ -197,7 +197,25 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     partial void OnCurrentSongChanged(MediaFile? value)
     {
         UpdateCurrentSongInfo();
+        OnPropertyChanged(nameof(IsVideoContent));
+        OnPropertyChanged(nameof(IsAudioContent));
+        OnPropertyChanged(nameof(IsIdle));
     }
+
+    /// <summary>True while a video file is the current song (the video surface is shown).</summary>
+    public bool IsVideoContent => CurrentSong?.Type == MediaType.Video;
+
+    /// <summary>True while an audio file is the current song (the "now playing" panel is shown).</summary>
+    public bool IsAudioContent => CurrentSong?.Type == MediaType.Audio;
+
+    /// <summary>True when nothing is playing (the waiting screen is shown).</summary>
+    public bool IsIdle => CurrentSong == null;
+
+    /// <summary>
+    /// The LibVLC player currently rendering video. Bound to the VideoView;
+    /// it can change when the controller swaps players (crossfade).
+    /// </summary>
+    public LibVLCSharp.Shared.MediaPlayer? ActiveMediaPlayer => _mediaPlayerController?.GetActiveMediaPlayer();
 
     partial void OnVolumeChanged(int value)
     {
@@ -315,7 +333,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 // Update service in background
                 await _playlistManager.AddSongAsync(mediaFile, position);
 
-                StatusMessage = $"Added '{mediaFile.Metadata?.Title ?? mediaFile.Filename}' to playlist ({position})";
+                StatusMessage = $"Added '{mediaFile.DisplayName}' to playlist ({position})";
             }
             else
             {
@@ -339,7 +357,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                     CurrentPlaylist.Add(viewModel);
                 }
 
-                StatusMessage = $"Added '{mediaFile.Metadata?.Title ?? mediaFile.Filename}' to playlist ({position})";
+                StatusMessage = $"Added '{mediaFile.DisplayName}' to playlist ({position})";
             }
         }
         catch (Exception ex)
@@ -583,9 +601,30 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     // Event handlers for service events
+    /// <summary>
+    /// Service events (LibVLC, FileSystemWatcher, timers) arrive on background threads:
+    /// bound properties and collections must only be touched on the UI thread.
+    /// </summary>
+    private static void OnUiThread(Action action)
+    {
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            action();
+        else
+            Avalonia.Threading.Dispatcher.UIThread.Post(action);
+    }
+
     private void OnPlaybackStateChanged(object? sender, PlaybackStateChangedEventArgs e)
+        => OnUiThread(() => HandlePlaybackStateChanged(e));
+
+    private void HandlePlaybackStateChanged(PlaybackStateChangedEventArgs e)
     {
         IsPlaying = e.NewState == PlaybackState.Playing;
+
+        if (e.NewState == PlaybackState.Playing)
+        {
+            // The active player may have changed (crossfade swap)
+            OnPropertyChanged(nameof(ActiveMediaPlayer));
+        }
         
         if (e.NewState == PlaybackState.Error)
         {
@@ -594,18 +633,27 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     private void OnPlaybackTimeChanged(object? sender, TimeChangedEventArgs e)
+        => OnUiThread(() => HandlePlaybackTimeChanged(e));
+
+    private void HandlePlaybackTimeChanged(TimeChangedEventArgs e)
     {
         CurrentTime = e.CurrentTime;
         Duration = e.Duration;
     }
 
     private void OnMediaEnded(object? sender, MediaEndedEventArgs e)
+        => OnUiThread(() => HandleMediaEnded(e));
+
+    private void HandleMediaEnded(MediaEndedEventArgs e)
     {
         // Auto-play next song
         Next();
     }
 
     private void OnPlaybackError(object? sender, PlaybackErrorEventArgs e)
+        => OnUiThread(() => HandlePlaybackError(e));
+
+    private void HandlePlaybackError(PlaybackErrorEventArgs e)
     {
         StatusMessage = $"Playback error: {e.ErrorMessage}";
         
@@ -623,10 +671,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private void OnPlaylistChanged(object? sender, PlaylistChangedEventArgs e)
     {
         // Sync playlist from service when it changes externally
-        SyncPlaylistFromService();
+        OnUiThread(SyncPlaylistFromService);
     }
 
     private void OnFilesAdded(object? sender, MediaFilesChangedEventArgs e)
+        => OnUiThread(() => HandleFilesAdded(e));
+
+    private void HandleFilesAdded(MediaFilesChangedEventArgs e)
     {
         foreach (var file in e.Files)
         {
@@ -641,6 +692,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     private void OnFilesRemoved(object? sender, MediaFilesChangedEventArgs e)
+        => OnUiThread(() => HandleFilesRemoved(e));
+
+    private void HandleFilesRemoved(MediaFilesChangedEventArgs e)
     {
         foreach (var file in e.Files)
         {
@@ -656,6 +710,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     private void OnFilesModified(object? sender, MediaFilesChangedEventArgs e)
+        => OnUiThread(() => HandleFilesModified(e));
+
+    private void HandleFilesModified(MediaFilesChangedEventArgs e)
     {
         foreach (var file in e.Files)
         {
@@ -694,9 +751,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (CurrentSong != null)
         {
-            var artist = CurrentSong.Metadata?.Artist ?? "Unknown Artist";
-            var title = CurrentSong.Metadata?.Title ?? CurrentSong.Filename;
-            CurrentSongInfo = $"{artist} - {title}";
+            CurrentSongInfo = CurrentSong.DisplayName;
         }
         else
         {
@@ -807,6 +862,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _isMuted;
     private int _volumeBeforeMute;
 
+    [RelayCommand]
     public void ToggleMute()
     {
         if (_isMuted)

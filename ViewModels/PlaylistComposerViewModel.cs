@@ -91,7 +91,7 @@ public partial class PlaylistComposerViewModel : ViewModelBase, IDisposable
         // Monitor search query changes with throttling (KEEP ReactiveUI for this)
         var throttledSearch = this.WhenAnyValue(x => x.CatalogSearchQuery)
             .Throttle(TimeSpan.FromMilliseconds(300))
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(UiScheduler)
             .Subscribe(_ => ApplyFiltering());
         _disposables.Add(throttledSearch);
 

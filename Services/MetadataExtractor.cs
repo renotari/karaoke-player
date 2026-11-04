@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
@@ -183,43 +183,7 @@ public class MetadataExtractor : IMetadataExtractor, IDisposable
     /// Patterns: "Artist - Title", "Artist-Title", "Title (Artist)", "Artist_Title"
     /// </summary>
     public (string Artist, string Title) ParseFilename(string filename)
-    {
-        if (string.IsNullOrWhiteSpace(filename))
-        {
-            return (string.Empty, string.Empty);
-        }
-
-        // Pattern 1: "Artist - Title" (with space around dash)
-        var match = Regex.Match(filename, @"^(.+?)\s+-\s+(.+)$");
-        if (match.Success)
-        {
-            return (match.Groups[1].Value.Trim(), match.Groups[2].Value.Trim());
-        }
-
-        // Pattern 2: "Artist-Title" (no space around dash)
-        match = Regex.Match(filename, @"^(.+?)-(.+)$");
-        if (match.Success)
-        {
-            return (match.Groups[1].Value.Trim(), match.Groups[2].Value.Trim());
-        }
-
-        // Pattern 3: "Title (Artist)"
-        match = Regex.Match(filename, @"^(.+?)\s*\((.+?)\)$");
-        if (match.Success)
-        {
-            return (match.Groups[2].Value.Trim(), match.Groups[1].Value.Trim());
-        }
-
-        // Pattern 4: "Artist_Title" (underscore separator)
-        match = Regex.Match(filename, @"^(.+?)_(.+)$");
-        if (match.Success)
-        {
-            return (match.Groups[1].Value.Trim(), match.Groups[2].Value.Trim());
-        }
-
-        // No pattern matched - use entire filename as title, empty artist
-        return (string.Empty, filename.Trim());
-    }
+        => FilenameParser.Parse(filename);
 
     /// <summary>
     /// Queues a media file for background metadata extraction

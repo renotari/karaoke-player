@@ -1,7 +1,7 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:KaraokePlayer.ViewModels"
-        xmlns:vlc="using:LibVLCSharp.Avalonia"
+        xmlns:views="using:KaraokePlayer.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1920" d:DesignHeight="1080"
@@ -26,9 +26,9 @@
         <Panel Grid.Row="0" Background="Black">
             
             <!-- LibVLC Video View for Video Files -->
-            <vlc:VideoView x:Name="VideoView"
-                          IsVisible="{Binding IsVideoContent}"
-                          Content="{Binding MediaPlayer}"/>
+            <views:EmbeddedVideoView x:Name="VideoView"
+                                     IsVisible="{Binding IsVideoContent}"
+                                     MediaPlayer="{Binding MediaPlayer}"/>
             
             <!-- Audio Visualization for MP3 Files -->
             <Panel x:Name="VisualizationPanel"
