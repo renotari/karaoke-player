@@ -212,6 +212,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         UpdateActiveVideoSurface();
         OnPropertyChanged(nameof(IsVideoSurfaceAVisible));
         OnPropertyChanged(nameof(IsVideoSurfaceBVisible));
+        OnPropertyChanged(nameof(IsVideoSurfaceAActive));
+        OnPropertyChanged(nameof(IsVideoSurfaceBActive));
+        OnPropertyChanged(nameof(NextSongInfo));
+        OnPropertyChanged(nameof(HasNextSong));
     }
 
     /// <summary>True while a video file is the current song (the video surface is shown).</summary>
@@ -228,11 +232,17 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     /// <summary>Which of the two video surfaces belongs to the player of the current song.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsVideoSurfaceAVisible), nameof(IsVideoSurfaceBVisible))]
+    [NotifyPropertyChangedFor(nameof(IsVideoSurfaceAVisible), nameof(IsVideoSurfaceBVisible),
+        nameof(IsVideoSurfaceAActive), nameof(IsVideoSurfaceBActive))]
     private int _activeVideoSurface;
 
-    public bool IsVideoSurfaceAVisible => IsVideoContent && ActiveVideoSurface == 0;
-    public bool IsVideoSurfaceBVisible => IsVideoContent && ActiveVideoSurface == 1;
+    /// <summary>Which surface shows the video, wherever the surfaces are (playback window in dual screen).</summary>
+    public bool IsVideoSurfaceAActive => IsVideoContent && ActiveVideoSurface == 0;
+    public bool IsVideoSurfaceBActive => IsVideoContent && ActiveVideoSurface == 1;
+
+    /// <summary>Surfaces of the main window: hidden in dual screen (the video is on the playback window).</summary>
+    public bool IsVideoSurfaceAVisible => !IsDualScreenMode && IsVideoSurfaceAActive;
+    public bool IsVideoSurfaceBVisible => !IsDualScreenMode && IsVideoSurfaceBActive;
 
     private void UpdateActiveVideoSurface()
     {
@@ -325,8 +335,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void SetLibrary(System.Collections.Generic.IEnumerable<MediaFile> files)
     {
+        // Materialize first: callers often pass a query over MediaFiles itself
+        var sorted = SortForDisplay(files);
+
         MediaFiles.Clear();
-        foreach (var file in SortForDisplay(files))
+        foreach (var file in sorted)
             MediaFiles.Add(file);
         MediaLibraryCount = MediaFiles.Count;
         ApplyFilter();
@@ -803,6 +816,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         Duration = 0;
         MarkCurrentlyPlaying();
         RefreshCommandStates();
+        OnPropertyChanged(nameof(NextSongInfo));
+        OnPropertyChanged(nameof(HasNextSong));
     }
 
     private void AddToHistory(MediaFile file)
@@ -987,6 +1002,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         MarkCurrentlyPlaying();
         RefreshCommandStates();
+        OnPropertyChanged(nameof(NextSongInfo));
+        OnPropertyChanged(nameof(HasNextSong));
     }
 
     private void UpdateCurrentSongInfo()
@@ -1122,12 +1139,77 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public void ToggleFullscreen()
+    // ----- Fullscreen / dual screen -------------------------------------------
+
+    /// <summary>
+    /// Fullscreen of the window showing the video: the main window (single screen,
+    /// together with Video Mode) or the playback window (dual screen).
+    /// The App applies it to the actual window.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWindowChrome))]
+    private bool _isFullscreen;
+
+    /// <summary>Menu, transport bar and status bar are hidden in single-screen fullscreen.</summary>
+    public bool ShowWindowChrome => !(IsFullscreen && !IsDualScreenMode);
+
+    private bool _videoModeBeforeFullscreen;
+
+    [RelayCommand]
+    public void ToggleFullscreen() => IsFullscreen = !IsFullscreen;
+
+    partial void OnIsFullscreenChanged(bool value)
     {
-        // This will be handled by the window itself
-        // For now, just toggle video mode as a placeholder
-        ToggleVideoMode();
+        if (IsDualScreenMode)
+            return;
+
+        if (value)
+        {
+            _videoModeBeforeFullscreen = IsVideoMode;
+            IsVideoMode = true;
+        }
+        else
+        {
+            IsVideoMode = _videoModeBeforeFullscreen;
+        }
     }
+
+    /// <summary>
+    /// Dual screen: video on a separate playback window (second monitor), the main
+    /// window keeps catalog and playlist. The App opens/closes the playback window.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsVideoSurfaceAVisible), nameof(IsVideoSurfaceBVisible), nameof(ShowWindowChrome))]
+    private bool _isDualScreenMode;
+
+    partial void OnIsDualScreenModeChanged(bool value)
+    {
+        if (value)
+        {
+            // Video Mode / fullscreen belong to the playback window now
+            if (IsVideoMode) ToggleVideoMode();
+            IsFullscreen = false;
+        }
+        StatusMessage = value ? "Dual screen mode" : "Single screen mode";
+    }
+
+    [RelayCommand]
+    private void SetSingleScreenMode() => IsDualScreenMode = false;
+
+    [RelayCommand]
+    private void SetDualScreenMode() => IsDualScreenMode = true;
+
+    /// <summary>"Artist - Title" of the song that will play next (empty when none).</summary>
+    public string NextSongInfo
+    {
+        get
+        {
+            var index = IsSongLoaded ? 1 : 0;
+            return CurrentPlaylist.Count > index ? CurrentPlaylist[index].MediaFile?.DisplayName ?? string.Empty : string.Empty;
+        }
+    }
+
+    public bool HasNextSong => !string.IsNullOrEmpty(NextSongInfo);
 
     public void AddSelectedToPlaylistEnd()
     {
@@ -1199,21 +1281,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public void ToggleDisplayMode()
-    {
-        // Toggle between single and dual screen mode
-        StatusMessage = "Display mode toggle not yet implemented";
-        // TODO: Implement display mode toggle
-    }
+    [RelayCommand]
+    public void ToggleDisplayMode() => IsDualScreenMode = !IsDualScreenMode;
 
+    /// <summary>Escape: leave fullscreen first, then Video Mode.</summary>
     public void CloseDialog()
     {
-        // Close any open dialogs or exit fullscreen
-        if (IsVideoMode)
+        if (IsFullscreen)
+        {
+            IsFullscreen = false;
+        }
+        else if (IsVideoMode)
         {
             ToggleVideoMode();
         }
-        StatusMessage = "Dialog closed";
     }
 
     [RelayCommand]

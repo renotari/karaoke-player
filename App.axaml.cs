@@ -92,6 +92,9 @@ public partial class App : Application
             // Set up global keyboard shortcuts
             SetupKeyboardShortcuts(mainWindow);
 
+            // Window-level effects of the ViewModel state (fullscreen, dual screen)
+            _mainWindowViewModel.PropertyChanged += OnMainViewModelPropertyChanged;
+
             // Cleanup on exit
             desktop.ShutdownRequested += OnShutdownRequested;
 
@@ -188,6 +191,166 @@ public partial class App : Application
             // The ViewModel will handle null services gracefully
             _loggingService?.LogCritical("Error initializing services", ex);
             Console.WriteLine($"Error initializing services: {ex.Message}");
+        }
+    }
+
+    // ----- Fullscreen and dual screen -----------------------------------------
+
+    private PlaybackWindow? _playbackWindow;
+    private bool _closingPlaybackWindow;
+    private Avalonia.Controls.WindowState _mainWindowStateBeforeFullscreen = Avalonia.Controls.WindowState.Normal;
+
+    private MainWindow? MainWindowInstance =>
+        (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainWindow;
+
+    private void OnMainViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(MainWindowViewModel.IsDualScreenMode):
+                ApplyDisplayMode();
+                PersistDisplayMode();
+                break;
+            case nameof(MainWindowViewModel.IsFullscreen):
+                ApplyFullscreen();
+                break;
+        }
+    }
+
+    private void ApplyFullscreen()
+    {
+        var vm = _mainWindowViewModel;
+        if (vm == null)
+            return;
+
+        if (vm.IsDualScreenMode)
+        {
+            if (_playbackWindow != null)
+            {
+                _playbackWindow.WindowState = vm.IsFullscreen
+                    ? Avalonia.Controls.WindowState.FullScreen
+                    : Avalonia.Controls.WindowState.Normal;
+            }
+            return;
+        }
+
+        if (MainWindowInstance is not { } main)
+            return;
+
+        if (vm.IsFullscreen)
+        {
+            if (main.WindowState != Avalonia.Controls.WindowState.FullScreen)
+                _mainWindowStateBeforeFullscreen = main.WindowState;
+            main.WindowState = Avalonia.Controls.WindowState.FullScreen;
+        }
+        else if (main.WindowState == Avalonia.Controls.WindowState.FullScreen)
+        {
+            main.WindowState = _mainWindowStateBeforeFullscreen;
+        }
+    }
+
+    /// <summary>Opens or closes the playback window and moves the video accordingly.</summary>
+    private void ApplyDisplayMode()
+    {
+        var vm = _mainWindowViewModel;
+        var main = MainWindowInstance;
+        if (vm == null || main == null)
+            return;
+
+        if (vm.IsDualScreenMode)
+        {
+            if (_playbackWindow != null)
+                return;
+
+            if (main.WindowState == Avalonia.Controls.WindowState.FullScreen)
+                main.WindowState = _mainWindowStateBeforeFullscreen;
+
+            var window = new PlaybackWindow { DataContext = vm };
+            var onSecondScreen = PlaceOnSecondaryScreen(window, main);
+
+            window.KeyDown += OnGlobalKeyDown; // shortcuts work there too
+            window.Closing += (_, args) =>
+            {
+                // Closed by the user: go back to single screen first, so the video
+                // moves to the main window before this window's surfaces disappear
+                if (!_closingPlaybackWindow)
+                {
+                    args.Cancel = true;
+                    vm.IsDualScreenMode = false;
+                }
+            };
+            window.Opened += (_, _) =>
+            {
+                if (onSecondScreen)
+                {
+                    window.WindowState = Avalonia.Controls.WindowState.FullScreen;
+                    vm.IsFullscreen = true;
+                }
+            };
+
+            _playbackWindow = window;
+            window.Show();
+            window.AttachVideoWindows();
+        }
+        else
+        {
+            var window = _playbackWindow;
+            _playbackWindow = null;
+            if (window == null)
+                return;
+
+            // Video back to the main window; close the playback window a moment later,
+            // once the player has restarted on the new surface
+            main.AttachVideoWindows();
+            window.Hide();
+            Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+            {
+                _closingPlaybackWindow = true;
+                window.Close();
+                _closingPlaybackWindow = false;
+            }, TimeSpan.FromSeconds(2));
+        }
+    }
+
+    /// <summary>
+    /// Puts the window on a screen other than the main window's one.
+    /// Returns false when there is only one screen (normal window next to the main one).
+    /// </summary>
+    private static bool PlaceOnSecondaryScreen(Window window, Window main)
+    {
+        var screens = main.Screens;
+        var mainScreen = screens.ScreenFromWindow(main) ?? screens.Primary;
+        var other = screens.All.FirstOrDefault(s => mainScreen == null || s.Bounds != mainScreen.Bounds);
+
+        if (other != null)
+        {
+            window.Position = other.WorkingArea.Position;
+            return true;
+        }
+
+        window.Width = 960;
+        window.Height = 540;
+        window.Position = new PixelPoint(main.Position.X + 80, main.Position.Y + 80);
+        return false;
+    }
+
+    private void PersistDisplayMode()
+    {
+        if (_settingsManager == null || _mainWindowViewModel == null)
+            return;
+
+        var mode = _mainWindowViewModel.IsDualScreenMode ? DisplayMode.Dual : DisplayMode.Single;
+        if (_settingsManager.GetSettings().DisplayMode == mode)
+            return;
+
+        try
+        {
+            _settingsManager.SetSetting(nameof(AppSettings.DisplayMode), mode);
+            _ = _settingsManager.SaveSettingsAsync();
+        }
+        catch (Exception ex)
+        {
+            _loggingService?.LogError("Could not save display mode", ex);
         }
     }
 
@@ -341,6 +504,7 @@ public partial class App : Application
                 _mainWindowViewModel.AutoPlayEnabled = settings.AutoPlayEnabled;
                 _mainWindowViewModel.ShuffleModeEnabled = settings.ShuffleMode;
                 _mainWindowViewModel.CrossfadeEnabled = settings.CrossfadeEnabled;
+                _mainWindowViewModel.IsDualScreenMode = settings.DisplayMode == DisplayMode.Dual;
             }
 
             if (_mediaPlayerController != null)
@@ -516,8 +680,35 @@ public partial class App : Application
 
     private void OnGlobalKeyDown(object? sender, KeyEventArgs e)
     {
-        // Let the keyboard shortcut manager handle the event
+        if (e.Handled)
+            return;
+
+        // While typing in a text box, plain keys (letters, Space, arrows, Delete...)
+        // and the usual editing combinations (Ctrl+A/C/V/X/Z...) belong to the text box
+        if (sender is TopLevel topLevel
+            && topLevel.FocusManager?.GetFocusedElement() is TextBox
+            && IsTextEditingKey(e))
+        {
+            return;
+        }
+
         _keyboardShortcutManager?.HandleKeyEvent(e);
+    }
+
+    private static bool IsTextEditingKey(KeyEventArgs e)
+    {
+        // Function keys and Escape always work as shortcuts
+        if (e.Key is >= Key.F1 and <= Key.F12 || e.Key == Key.Escape)
+            return false;
+
+        var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        var alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+
+        if (!ctrl && !alt)
+            return true;
+
+        return ctrl && e.Key is Key.A or Key.C or Key.V or Key.X or Key.Z or Key.Y
+            or Key.Left or Key.Right or Key.Home or Key.End or Key.Back or Key.Delete;
     }
 
     private void DisableAvaloniaDataAnnotationValidation()

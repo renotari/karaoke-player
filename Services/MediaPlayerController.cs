@@ -43,6 +43,7 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     private bool _subtitlesEnabled = true;
     private readonly float[] _audioSpectrum = new float[256];
     private string? _audioDeviceId; // null = system default
+    private (IntPtr First, IntPtr Second) _videoWindows;
 
     // Crossfade
     private bool _crossfadeEnabled;
@@ -331,10 +332,54 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     /// </summary>
     public void AttachVideoWindows(IntPtr first, IntPtr second)
     {
+        MediaPlayer? toRestart = null;
+
         lock (_sync)
         {
+            if (first == _videoWindows.First && second == _videoWindows.Second)
+                return; // already rendering there
+
+            _videoWindows = (first, second);
             SetVideoWindow(_players[0], first);
             SetVideoWindow(_players[1], second);
+
+            // A video already playing keeps its old window until it restarts
+            if (_currentMedia?.Type == Models.MediaType.Video && Active.Media != null
+                && State is PlaybackState.Playing or PlaybackState.Paused)
+            {
+                toRestart = Active;
+            }
+        }
+
+        if (toRestart != null)
+        {
+            ThreadPool.QueueUserWorkItem(_ => RestartAtSamePosition(toRestart));
+        }
+    }
+
+    /// <summary>Restarts the current media where it was (used to move video to a new window).</summary>
+    private void RestartAtSamePosition(MediaPlayer player)
+    {
+        lock (_sync)
+        {
+            if (!ReferenceEquals(player, Active) || player.Media == null)
+                return;
+
+            CancelCrossfade();
+            var time = player.Time;
+            var wasPaused = !player.IsPlaying;
+
+            player.Stop();
+            player.Play();
+
+            // Seeking only works once the input is running
+            for (int i = 0; i < 60 && !player.IsPlaying; i++)
+                Thread.Sleep(50);
+
+            if (time > 0)
+                player.Time = time;
+            if (wasPaused)
+                player.SetPause(true);
         }
     }
 

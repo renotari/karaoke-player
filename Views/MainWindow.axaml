@@ -56,7 +56,7 @@
         <Grid RowDefinitions="Auto,*,Auto,Auto">
         
         <!-- Menu Bar -->
-        <Menu Grid.Row="0">
+        <Menu Grid.Row="0" IsVisible="{Binding ShowWindowChrome}">
             <MenuItem Header="_File">
                 <MenuItem Header="_Open Media Directory..." Command="{Binding OpenMediaDirectoryCommand}" />
                 <MenuItem Header="_Refresh Library" Command="{Binding RefreshLibraryCommand}" InputGesture="Ctrl+R" />
@@ -67,9 +67,10 @@
             </MenuItem>
             <MenuItem Header="_View">
                 <MenuItem Header="_Toggle Video Mode" Command="{Binding ToggleVideoModeCommand}" />
-                <MenuItem Header="_Single Screen Mode" />
-                <MenuItem Header="_Dual Screen Mode" />
-                <MenuItem Header="_Fullscreen" />
+                <MenuItem Header="_Fullscreen" Command="{Binding ToggleFullscreenCommand}" InputGesture="F11" />
+                <Separator />
+                <MenuItem Header="_Single Screen Mode" Command="{Binding SetSingleScreenModeCommand}" />
+                <MenuItem Header="_Dual Screen Mode" Command="{Binding SetDualScreenModeCommand}" InputGesture="Ctrl+D" />
             </MenuItem>
             <MenuItem Header="_Playback">
                 <MenuItem Header="_Play/Pause" Command="{Binding PlayPauseCommand}" />
@@ -214,6 +215,13 @@
                                        Foreground="White"
                                        FontSize="24"
                                        HorizontalAlignment="Center"/>
+                            <TextBlock Text="{Binding NextSongInfo, StringFormat='Up next: {0}'}"
+                                       Foreground="#CCFFFFFF"
+                                       FontSize="18"
+                                       HorizontalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       IsVisible="{Binding HasNextSong}"/>
                         </StackPanel>
 
                         <!-- Now playing (audio files) -->
@@ -239,6 +247,37 @@
                                        TextAlignment="Center"
                                        HorizontalAlignment="Center"/>
                         </StackPanel>
+
+                        <!-- Dual screen: the video is on the playback window -->
+                        <Border Background="Black" IsVisible="{Binding IsDualScreenMode}">
+                            <StackPanel HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Spacing="8"
+                                        Margin="24">
+                                <TextBlock Text="📺" FontSize="48" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Video is on the second screen"
+                                           Foreground="White"
+                                           FontSize="20"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding CurrentSongInfo}"
+                                           Foreground="#CCFFFFFF"
+                                           FontSize="16"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding NextSongInfo, StringFormat='Up next: {0}'}"
+                                           Foreground="#99FFFFFF"
+                                           FontSize="14"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           IsVisible="{Binding HasNextSong}"/>
+                                <Button Content="Back to single screen"
+                                        HorizontalAlignment="Center"
+                                        Margin="0,12,0,0"
+                                        Command="{Binding SetSingleScreenModeCommand}"/>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Video surfaces: one native window per LibVLC player (crossfade uses
                              both). They are always in the visual tree so their native handles
@@ -478,7 +517,8 @@
         </Grid>
 
         <!-- Playback Controls -->
-        <Border Grid.Row="2" 
+        <Border Grid.Row="2"
+                IsVisible="{Binding ShowWindowChrome}"
                 BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" 
                 BorderThickness="0,1,0,0"
                 Padding="16,8"
@@ -580,7 +620,8 @@
         </Border>
 
         <!-- Status Bar -->
-        <Border Grid.Row="3" 
+        <Border Grid.Row="3"
+                IsVisible="{Binding ShowWindowChrome}"
                 BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" 
                 BorderThickness="0,1,0,0"
                 Padding="16,4"

@@ -174,7 +174,8 @@ public partial class MainWindow : Window
         }
     }
 
-    private void AttachVideoWindows()
+    /// <summary>Gives the main window's video surfaces to the players (when both exist).</summary>
+    public void AttachVideoWindows()
     {
         var a = this.FindControl<EmbeddedVideoView>("VideoViewA")?.Handle ?? IntPtr.Zero;
         var b = this.FindControl<EmbeddedVideoView>("VideoViewB")?.Handle ?? IntPtr.Zero;
