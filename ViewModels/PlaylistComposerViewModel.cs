@@ -118,11 +118,11 @@ public partial class PlaylistComposerViewModel : ViewModelBase, IDisposable
     }
 
     // Properties
-    public ObservableCollection<MediaFile> CatalogFiles { get; private set; }
-    public ObservableCollection<MediaFile> FilteredCatalogFiles { get; private set; }
-    public ObservableCollection<MediaFile> ComposedPlaylist { get; private set; }
-    public ObservableCollection<MediaFile> SelectedCatalogItems { get; private set; }
-    public ObservableCollection<string> ArtistFilterOptions { get; private set; }
+    public ObservableCollection<MediaFile> CatalogFiles { get; private set; } = new();
+    public ObservableCollection<MediaFile> FilteredCatalogFiles { get; private set; } = new();
+    public ObservableCollection<MediaFile> ComposedPlaylist { get; private set; } = new();
+    public ObservableCollection<MediaFile> SelectedCatalogItems { get; private set; } = new();
+    public ObservableCollection<string> ArtistFilterOptions { get; private set; } = new();
 
     // Partial methods for property change notifications
     partial void OnCatalogSearchQueryChanged(string value)

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -6,6 +6,10 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using KaraokePlayer.ViewModels;
 using KaraokePlayer.Services;
+
+// The drag-and-drop code uses Avalonia's legacy DataObject API (still supported in 11.x,
+// replaced by DataTransfer/DoDragDropAsync): migrate when moving to Avalonia 12.
+#pragma warning disable CS0618
 
 namespace KaraokePlayer.Views;
 

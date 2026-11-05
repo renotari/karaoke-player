@@ -26,6 +26,8 @@
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' == 'Windows_NT'">win-x64</RuntimeIdentifier>
     <IsWindowsTarget Condition="'$(OS)' == 'Windows_NT' or $(RuntimeIdentifier.StartsWith('win'))">true</IsWindowsTarget>
     <PublishSingleFile>false</PublishSingleFile>
+    <!-- The test runner classes have their own Main methods (they are run through Program.Main) -->
+    <NoWarn>$(NoWarn);CS8892</NoWarn>
   </PropertyGroup>
 
   <!-- Windows release settings (self-contained, ReadyToRun) -->

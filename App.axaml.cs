@@ -39,7 +39,7 @@ public partial class App : Application
     private MainWindowViewModel? _mainWindowViewModel;
 
     // Public properties for service access
-    public static App? Current => Application.Current as App;
+    public static new App? Current => Application.Current as App;
     public ISettingsManager? SettingsManager => _settingsManager;
     public IMediaPlayerController? MediaPlayerController => _mediaPlayerController;
     public ISearchEngine? SearchEngine => _searchEngine;
@@ -652,26 +652,34 @@ public partial class App : Application
         if (_keyboardShortcutManager == null || _mainWindowViewModel == null)
             return;
 
-        // Register shortcut handlers
-        _keyboardShortcutManager.RegisterShortcut("PlayPause", () => _mainWindowViewModel.PlayPauseCommand?.Execute(System.Reactive.Unit.Default));
-        _keyboardShortcutManager.RegisterShortcut("Stop", () => _mainWindowViewModel.StopCommand?.Execute(System.Reactive.Unit.Default));
-        _keyboardShortcutManager.RegisterShortcut("Next", () => _mainWindowViewModel.NextCommand?.Execute(System.Reactive.Unit.Default));
-        _keyboardShortcutManager.RegisterShortcut("Previous", () => _mainWindowViewModel.PreviousCommand?.Execute(System.Reactive.Unit.Default));
-        _keyboardShortcutManager.RegisterShortcut("VolumeUp", () => _mainWindowViewModel.VolumeUp());
-        _keyboardShortcutManager.RegisterShortcut("VolumeDown", () => _mainWindowViewModel.VolumeDown());
-        _keyboardShortcutManager.RegisterShortcut("Mute", () => _mainWindowViewModel.ToggleMute());
-        _keyboardShortcutManager.RegisterShortcut("ToggleFullscreen", () => _mainWindowViewModel.ToggleFullscreen());
-        _keyboardShortcutManager.RegisterShortcut("AddToPlaylistEnd", () => _mainWindowViewModel.AddSelectedToPlaylistEnd());
-        _keyboardShortcutManager.RegisterShortcut("AddToPlaylistNext", () => _mainWindowViewModel.AddSelectedToPlaylistNext());
-        _keyboardShortcutManager.RegisterShortcut("RemoveFromPlaylist", () => _mainWindowViewModel.RemoveSelectedFromPlaylist());
-        _keyboardShortcutManager.RegisterShortcut("ClearPlaylist", () => _mainWindowViewModel.ClearPlaylistCommand?.Execute(System.Reactive.Unit.Default));
-        _keyboardShortcutManager.RegisterShortcut("ShufflePlaylist", () => _mainWindowViewModel.ShufflePlaylistCommand?.Execute(System.Reactive.Unit.Default));
-        _keyboardShortcutManager.RegisterShortcut("FocusSearch", () => mainWindow.FocusSearchBox());
-        _keyboardShortcutManager.RegisterShortcut("OpenPlaylistComposer", () => _mainWindowViewModel.OpenPlaylistComposer());
-        _keyboardShortcutManager.RegisterShortcut("OpenSettings", () => _mainWindowViewModel.OpenSettings());
-        _keyboardShortcutManager.RegisterShortcut("RefreshLibrary", () => _mainWindowViewModel.RefreshLibrary());
-        _keyboardShortcutManager.RegisterShortcut("ToggleDisplayMode", () => _mainWindowViewModel.ToggleDisplayMode());
-        _keyboardShortcutManager.RegisterShortcut("CloseDialog", () => _mainWindowViewModel.CloseDialog());
+        // Register shortcut handlers (action ids as in AppSettings.KeyboardShortcuts)
+        var vm = _mainWindowViewModel;
+        var shortcuts = new (string Action, Action Handler)[]
+        {
+            ("PlayPause", () => vm.PlayPauseCommand.Execute(null)),
+            ("Stop", () => vm.StopCommand.Execute(null)),
+            ("Next", () => vm.NextCommand.Execute(null)),
+            ("Previous", () => vm.PreviousCommand.Execute(null)),
+            ("VolumeUp", vm.VolumeUp),
+            ("VolumeDown", vm.VolumeDown),
+            ("Mute", vm.ToggleMute),
+            ("ToggleFullscreen", vm.ToggleFullscreen),
+            ("AddToPlaylistEnd", vm.AddSelectedToPlaylistEnd),
+            ("AddToPlaylistNext", vm.AddSelectedToPlaylistNext),
+            ("RemoveFromPlaylist", vm.RemoveSelectedFromPlaylist),
+            ("ClearPlaylist", () => vm.ClearPlaylistCommand.Execute(null)),
+            ("ShufflePlaylist", () => vm.ShufflePlaylistCommand.Execute(null)),
+            ("FocusSearch", mainWindow.FocusSearchBox),
+            ("OpenPlaylistComposer", vm.OpenPlaylistComposer),
+            ("OpenSettings", vm.OpenSettings),
+            ("RefreshLibrary", () => vm.RefreshLibraryCommand.Execute(null)),
+            ("ToggleDisplayMode", vm.ToggleDisplayMode),
+            ("CloseDialog", vm.CloseDialog),
+        };
+        foreach (var (action, handler) in shortcuts)
+        {
+            _keyboardShortcutManager.RegisterShortcut(action, handler);
+        }
 
         // Attach global key event handler to main window
         mainWindow.KeyDown += OnGlobalKeyDown;

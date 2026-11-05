@@ -253,7 +253,7 @@ public partial class MainWindow : Window
     {
         if (DataContext is MainWindowViewModel viewModel)
         {
-            viewModel.ExpandControlHandleCommand.Execute(System.Reactive.Unit.Default);
+            viewModel.ExpandControlHandleCommand.Execute(null);
         }
     }
 
@@ -261,7 +261,7 @@ public partial class MainWindow : Window
     {
         if (DataContext is MainWindowViewModel viewModel)
         {
-            viewModel.ExpandControlHandleCommand.Execute(System.Reactive.Unit.Default);
+            viewModel.ExpandControlHandleCommand.Execute(null);
         }
     }
 

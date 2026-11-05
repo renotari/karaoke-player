@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Threading.Tasks;
 using KaraokePlayer.Models;
@@ -92,7 +92,7 @@ public class MediaPlayerControllerTest
             var devices = controller.GetAudioDevices();
             Assert(devices != null, "Audio devices list should not be null");
             
-            Console.WriteLine($"  Found {devices.Count} audio device(s)");
+            Console.WriteLine($"  Found {devices!.Count} audio device(s)");
             foreach (var device in devices)
             {
                 Console.WriteLine($"    - {device.Name} (ID: {device.Id})");
@@ -147,6 +147,7 @@ public class MediaPlayerControllerTest
             // Test stop (should not change state since already stopped)
             controller.Stop();
             Assert(controller.State == PlaybackState.Stopped, "State should remain Stopped");
+            Assert(!stateChanged, "Stopping an idle player should not raise StateChanged");
             
             // Test pause when not playing (should not crash)
             controller.Pause();
