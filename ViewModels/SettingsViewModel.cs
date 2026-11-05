@@ -548,6 +548,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             CacheSize = source.CacheSize,
             KeyboardShortcuts = new System.Collections.Generic.Dictionary<string, string>(
                 source.KeyboardShortcuts ?? AppSettings.GetDefaultKeyboardShortcuts()),
+            // Not edited in the dialog, but must survive OK/Apply
+            MainWindowBounds = source.MainWindowBounds,
+            PlaybackWindowBounds = source.PlaybackWindowBounds,
+            CatalogColumnWidth = source.CatalogColumnWidth,
+            PlaylistColumnWidth = source.PlaylistColumnWidth,
             CreatedAt = source.CreatedAt,
             LastModified = source.LastModified
         };

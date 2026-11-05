@@ -194,6 +194,27 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Catalog and playlist column widths (the ones before Video Mode, if active).</summary>
+    public (double Catalog, double Playlist) GetSideColumnWidths()
+    {
+        if (_savedColumnWidths != null)
+            return (_savedColumnWidths[0].Value, _savedColumnWidths[3].Value);
+
+        var grid = this.FindControl<Grid>("MainContentGrid");
+        if (grid == null || grid.ColumnDefinitions.Count != 5)
+            return (300, 300);
+        return (grid.ColumnDefinitions[0].ActualWidth, grid.ColumnDefinitions[4].ActualWidth);
+    }
+
+    public void SetSideColumnWidths(double catalog, double playlist)
+    {
+        var grid = this.FindControl<Grid>("MainContentGrid");
+        if (grid == null || grid.ColumnDefinitions.Count != 5 || _savedColumnWidths != null)
+            return;
+        if (catalog >= 150) grid.ColumnDefinitions[0].Width = new GridLength(catalog);
+        if (playlist >= 150) grid.ColumnDefinitions[4].Width = new GridLength(playlist);
+    }
+
     // Column widths saved before entering Video Mode (keeps sizes set with the splitters)
     private GridLength[]? _savedColumnWidths;
 

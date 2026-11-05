@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -57,6 +57,22 @@ public class AppSettings
     /// Cache size in MB
     /// </summary>
     public int CacheSize { get; set; } = 500;
+
+    // Window layout, restored at startup (stored in settings.json only, not in the database)
+
+    [NotMapped]
+    public WindowBounds? MainWindowBounds { get; set; }
+
+    [NotMapped]
+    public WindowBounds? PlaybackWindowBounds { get; set; }
+
+    /// <summary>Width of the catalog column in the main window (pixels)</summary>
+    [NotMapped]
+    public double CatalogColumnWidth { get; set; } = 300;
+
+    /// <summary>Width of the playlist column in the main window (pixels)</summary>
+    [NotMapped]
+    public double PlaylistColumnWidth { get; set; } = 300;
 
     /// <summary>
     /// Keyboard shortcuts stored as JSON
@@ -134,4 +150,14 @@ public enum DisplayMode
 {
     Single,
     Dual
+}
+
+/// <summary>Position and size of a window (device-independent size, screen position in pixels).</summary>
+public class WindowBounds
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+    public double Width { get; set; }
+    public double Height { get; set; }
+    public bool IsMaximized { get; set; }
 }

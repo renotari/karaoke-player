@@ -263,6 +263,8 @@ public partial class App : Application
 
             var window = new PlaybackWindow { DataContext = vm };
             var onSecondScreen = PlaceOnSecondaryScreen(window, main);
+            if (!onSecondScreen && _settingsManager?.GetSettings().PlaybackWindowBounds is { } saved)
+                ApplyBounds(window, saved, main);
 
             window.KeyDown += OnGlobalKeyDown; // shortcuts work there too
             window.Closing += (_, args) =>
@@ -294,6 +296,9 @@ public partial class App : Application
             _playbackWindow = null;
             if (window == null)
                 return;
+
+            if (_settingsManager != null && window.WindowState == Avalonia.Controls.WindowState.Normal)
+                _settingsManager.GetSettings().PlaybackWindowBounds = BoundsOf(window);
 
             // Video back to the main window; close the playback window a moment later,
             // once the player has restarted on the new surface
@@ -328,6 +333,81 @@ public partial class App : Application
         window.Height = 540;
         window.Position = new PixelPoint(main.Position.X + 80, main.Position.Y + 80);
         return false;
+    }
+
+    // ----- Window layout -----------------------------------------------------
+
+    private static WindowBounds BoundsOf(Window window) => new()
+    {
+        X = window.Position.X,
+        Y = window.Position.Y,
+        Width = window.Width,
+        Height = window.Height,
+        IsMaximized = window.WindowState == Avalonia.Controls.WindowState.Maximized
+    };
+
+    /// <summary>True when the saved position is (at least partly) on a connected screen.</summary>
+    private static bool IsOnScreen(Window reference, WindowBounds bounds)
+    {
+        var point = new PixelPoint(bounds.X + 50, bounds.Y + 20);
+        return reference.Screens.All.Any(s => s.WorkingArea.Contains(point));
+    }
+
+    private static void ApplyBounds(Window window, WindowBounds bounds, Window reference)
+    {
+        if (bounds.Width >= 400 && bounds.Height >= 300)
+        {
+            window.Width = bounds.Width;
+            window.Height = bounds.Height;
+        }
+        if (IsOnScreen(reference, bounds))
+            window.Position = new PixelPoint(bounds.X, bounds.Y);
+        if (bounds.IsMaximized)
+            window.WindowState = Avalonia.Controls.WindowState.Maximized;
+    }
+
+    private void RestoreWindowLayout(AppSettings settings)
+    {
+        if (MainWindowInstance is not { } main)
+            return;
+
+        try
+        {
+            if (settings.MainWindowBounds is { } bounds)
+                ApplyBounds(main, bounds, main);
+            main.SetSideColumnWidths(settings.CatalogColumnWidth, settings.PlaylistColumnWidth);
+        }
+        catch (Exception ex)
+        {
+            _loggingService?.LogWarning($"Could not restore window layout: {ex.Message}");
+        }
+    }
+
+    private void SaveWindowLayout(AppSettings settings)
+    {
+        if (MainWindowInstance is not { } main)
+            return;
+
+        if (main.WindowState is Avalonia.Controls.WindowState.Normal or Avalonia.Controls.WindowState.Maximized)
+        {
+            var bounds = BoundsOf(main);
+            if (main.WindowState == Avalonia.Controls.WindowState.Maximized && settings.MainWindowBounds != null)
+            {
+                // Keep the normal size to come back to when un-maximizing
+                bounds.X = settings.MainWindowBounds.X;
+                bounds.Y = settings.MainWindowBounds.Y;
+                bounds.Width = settings.MainWindowBounds.Width;
+                bounds.Height = settings.MainWindowBounds.Height;
+            }
+            settings.MainWindowBounds = bounds;
+        }
+
+        var (catalog, playlist) = main.GetSideColumnWidths();
+        settings.CatalogColumnWidth = catalog;
+        settings.PlaylistColumnWidth = playlist;
+
+        if (_playbackWindow is { WindowState: Avalonia.Controls.WindowState.Normal } playback)
+            settings.PlaybackWindowBounds = BoundsOf(playback);
     }
 
     private void PersistDisplayMode()
@@ -452,6 +532,8 @@ public partial class App : Application
             await _settingsManager.LoadSettingsAsync();
             var settings = _settingsManager.GetSettings();
             _loggingService?.LogInformation($"Settings loaded - media directory: {settings.MediaDirectory}");
+
+            RestoreWindowLayout(settings);
 
             // Applies everything, including the scan of the media directory
             ApplySettings(settings);
@@ -602,47 +684,36 @@ public partial class App : Application
     {
         _loggingService?.LogInformation("Application shutting down");
 
-        // Remember the volume set with the slider
-        try
+        void Step(string what, Action action)
+        {
+            try { action(); }
+            catch (Exception ex) { _loggingService?.LogError($"Shutdown: {what} failed", ex); }
+        }
+
+        // Remember the volume set with the slider and the window layout.
+        // Saved on a worker thread: waiting here on an async method that resumes
+        // on the UI thread would deadlock (the app would never close).
+        Step("save settings", () =>
         {
             if (_settingsManager != null && _mainWindowViewModel != null)
             {
                 var settings = _settingsManager.GetSettings();
                 settings.Volume = _mainWindowViewModel.Volume / 100.0;
-                _settingsManager.SaveSettingsAsync().GetAwaiter().GetResult();
+                SaveWindowLayout(settings);
+                Task.Run(() => _settingsManager.SaveSettingsAsync()).Wait(TimeSpan.FromSeconds(5));
             }
-        }
-        catch (Exception ex)
-        {
-            _loggingService?.LogError("Could not save settings on exit", ex);
-        }
-        
-        // Stop background processing
-        _metadataExtractor?.StopProcessing();
-        _thumbnailGenerator?.StopProcessing();
-        
-        // Cleanup services
-        if (_mediaPlayerController is IDisposable playerDisposable)
-        {
-            playerDisposable.Dispose();
-        }
+        });
 
-        if (_mediaLibraryManager is IDisposable libraryDisposable)
+        Step("stop background work", () =>
         {
-            libraryDisposable.Dispose();
-        }
+            _metadataExtractor?.StopProcessing();
+            _thumbnailGenerator?.StopProcessing();
+        });
 
-        if (_metadataExtractor is IDisposable extractorDisposable)
-        {
-            extractorDisposable.Dispose();
-        }
-
-        if (_thumbnailGenerator is IDisposable generatorDisposable)
-        {
-            generatorDisposable.Dispose();
-        }
-
-        // DbContext factory doesn't need disposal - contexts are disposed via using statements
+        Step("dispose player", () => (_mediaPlayerController as IDisposable)?.Dispose());
+        Step("dispose library", () => (_mediaLibraryManager as IDisposable)?.Dispose());
+        Step("dispose metadata extractor", () => (_metadataExtractor as IDisposable)?.Dispose());
+        Step("dispose thumbnail generator", () => (_thumbnailGenerator as IDisposable)?.Dispose());
 
         _loggingService?.LogInformation("Application shutdown complete");
     }
