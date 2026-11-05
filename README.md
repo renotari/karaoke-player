@@ -1,9 +1,9 @@
-# Karaoke Player
+﻿# Karaoke Player
 
 A professional karaoke and media player application for Windows with advanced features including crossfade transitions, audio visualizations, and flexible single/dual-screen configurations.
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
-![.NET](https://img.shields.io/badge/.NET-8.0-purple)
+![.NET](https://img.shields.io/badge/.NET-10.0-purple)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
 ## Features
@@ -12,18 +12,18 @@ A professional karaoke and media player application for Windows with advanced fe
 - **Multi-Format Support**: Play MP4, MKV, WEBM video files and MP3 audio files
 - **Smart Media Library**: Automatic directory scanning with metadata extraction and thumbnail generation
 - **Advanced Search**: Fast search across 30,000+ files with partial matching and search history
-- **Playlist Management**: Queue songs, reorder, shuffle, and save/load playlists (M3U/M3U8 format)
-- **Seamless Crossfade**: Professional-grade transitions between songs with configurable duration (1-20 seconds)
+- **Karaoke Queue**: the song playing is on top, finished songs leave the queue; add songs "next" or at the end, reorder, shuffle, play now; save/load playlists (M3U/M3U8)
+- **Crossfade**: audio crossfade between songs with configurable duration (1-20 seconds); the video switches to the next song when the fade starts
 
 ### Display Modes
 - **Single Screen Mode**: All-in-one interface with video player, catalog, and playlist
 - **Video Mode**: Maximized video display with collapsible control handle for quick access
-- **Dual Screen Mode**: Separate playback and control windows for multi-monitor setups
+- **Dual Screen Mode**: fullscreen playback window on the second monitor, catalog and playlist on the main one
 - **Fullscreen Support**: Immersive playback experience with F11 toggle
 
 ### Audio Features
-- **Audio Visualizations**: 4 styles (bars, waveform, circular, particles) for MP3 playback
-- **Global Volume Control**: Consistent audio levels with boost mode for quiet songs
+- **Audio Visualizations**: music-reactive visualizations for MP3 files (spectrum bars, oscilloscope, spectrometer, VU meter) or a simple title screen
+- **Volume Control**: volume remembered between sessions, optional normalization for quiet/loud songs
 - **Audio Device Selection**: Route sound to specific output devices (PA systems, external speakers)
 - **Subtitle Support**: Toggle embedded subtitles on/off for video files
 
@@ -31,7 +31,7 @@ A professional karaoke and media player application for Windows with advanced fe
 - **Playlist Composer**: Dedicated window for building playlists with multi-select and drag-and-drop
 - **Auto-Refresh**: Automatically detect new files added to media directory
 - **Error Handling**: Graceful recovery from corrupted files, missing files, and playback errors
-- **Keyboard Shortcuts**: Fully customizable shortcuts for efficient operation
+- **Keyboard Shortcuts**: customizable in Settings (they do not interfere with typing in the search box)
 
 ## System Requirements
 
@@ -50,7 +50,7 @@ A professional karaoke and media player application for Windows with advanced fe
 - **Graphics**: DirectX 12 compatible graphics card with hardware acceleration
 
 ### Dependencies
-- **.NET 10 Runtime**: Automatically checked during installation
+- **.NET runtime**: included (self-contained build), nothing to install
 - **LibVLC**: Bundled with the application
 
 ## Installation
@@ -60,16 +60,14 @@ A professional karaoke and media player application for Windows with advanced fe
 1. Download `KaraokePlayer-Setup-1.0.0.exe` from the releases page
 2. Run the installer and follow the setup wizard
 3. The installer will:
-   - Check for .NET 10 Runtime (prompt to download if missing)
    - Install the application to `C:\Program Files\Karaoke Player`
    - Create desktop and start menu shortcuts
    - Set up application data directory
 
 ### Manual Installation
 
-1. Ensure .NET 10 Runtime is installed: https://dotnet.microsoft.com/download/dotnet/10.0
-2. Extract the application files to your desired location
-3. Run `KaraokePlayer.exe`
+1. Extract the application files to your desired location
+2. Run `KaraokePlayer.exe`
 
 ## Documentation
 
@@ -87,7 +85,7 @@ For detailed documentation, see the [docs/](docs/) directory:
 
 1. **Welcome Dialog**: On first launch, you'll be prompted to select your media directory
    - Default: Windows user media directory (`C:\Users\[YourName]\Music`)
-   - Or browse to your custom karaoke/music folder
+   - Type the path or browse to your karaoke/music folder
 
 2. **Initial Scan**: The application will scan your media directory
    - Quick scan indexes all supported files (MP4, MKV, WEBM, MP3)
@@ -99,12 +97,12 @@ For detailed documentation, see the [docs/](docs/) directory:
 #### Playing Songs
 
 1. **Search**: Type in the search box to find songs by artist, title, or filename
-2. **Add to Playlist**: Double-click a song or drag it to the playlist pane
+2. **Add to Playlist**: Double-click a song (it plays next) or right-click for "next"/"end"
 3. **Playback**: Click Play or press Space to start playback
 4. **Queue Management**: 
    - Add songs "next" (default) or at "end" of playlist
-   - Drag to reorder songs in the playlist
-   - Right-click for additional options
+   - Right-click a playlist song: play now, play next, move up/down, remove
+   - Double-click a playlist song to play it right away
 
 #### Display Modes
 
@@ -114,9 +112,9 @@ For detailed documentation, see the [docs/](docs/) directory:
 - Collapsible control handle for quick song requests
 
 **Dual Screen Mode**:
-- Playback Window: Full-screen video on second monitor
-- Control Window: Catalog and playlist on primary monitor
-- Switch modes via `Ctrl+D` or Settings
+- Playback Window: full-screen video on the second monitor (shows "Up next" between songs)
+- Main window: catalog and playlist
+- Switch modes via `Ctrl+D`, the View menu or Settings
 
 #### Keyboard Shortcuts
 
@@ -126,7 +124,7 @@ For detailed documentation, see the [docs/](docs/) directory:
 - `Left Arrow` - Previous track
 - `Up/Down Arrow` - Volume control
 - `M` - Mute/Unmute
-- `F` or `F11` - Fullscreen
+- `F11` - Fullscreen
 
 **Playlist**:
 - `Ctrl+A` - Add to end
@@ -140,7 +138,10 @@ For detailed documentation, see the [docs/](docs/) directory:
 - `Ctrl+P` - Open Playlist Composer
 - `Ctrl+,` - Open Settings
 - `Ctrl+R` - Refresh library
-- `Escape` - Exit fullscreen/close dialog
+- `Ctrl+D` - Toggle single/dual screen
+- `Escape` - Exit fullscreen, then Video Mode
+
+Shortcuts do not fire while typing in a text box (except function keys and Escape).
 
 ### Advanced Features
 
@@ -149,7 +150,7 @@ For detailed documentation, see the [docs/](docs/) directory:
 1. Open Settings (`Ctrl+,`)
 2. Navigate to Audio tab
 3. Enable crossfade and set duration (1-20 seconds)
-4. Songs will seamlessly transition with audio/video fade effects
+4. Near the end of each song the next one starts: the two audio tracks fade into each other and the video switches to the new song
 
 #### Playlist Composer
 
@@ -162,13 +163,14 @@ For detailed documentation, see the [docs/](docs/) directory:
 
 #### Audio Visualizations
 
-For MP3 files, choose from 4 visualization styles:
-- **Bars**: Classic frequency bars
-- **Waveform**: Oscilloscope-style display
-- **Circular**: Radial frequency visualization
-- **Particles**: Dynamic particle system
+For MP3 files, the screen shows a music-reactive visualization (drawn by VLC) with title and artist underneath:
+- **Spectrum bars**
+- **Oscilloscope**
+- **Spectrometer**
+- **VU meter**
+- **None**: title and artist only
 
-Change style in Settings > Display > Visualization Style
+Change style in Settings > Display > Audio Visualization Style (applies from the next song)
 
 ## Configuration
 
@@ -180,20 +182,18 @@ Change style in Settings > Display > Visualization Style
 - Auto-play and shuffle options
 
 **Audio Tab**:
-- Volume and audio boost
-- Audio output device selection
+- Volume and audio boost (volume normalization)
+- Audio output device selection, with a test tone button
 - Crossfade settings (enable, duration)
-- Test audio button
 
 **Display Tab**:
 - Theme selection
 - Font size
 - Visualization style
-- Window layout preferences
+- Window positions, sizes and column widths are remembered automatically
 
 **Keyboard Tab**:
 - Customize all keyboard shortcuts
-- Conflict detection
 - Reset to defaults
 
 ### File Locations
@@ -201,8 +201,8 @@ Change style in Settings > Display > Visualization Style
 - **Application Data**: `%APPDATA%\KaraokePlayer`
 - **Settings**: `%APPDATA%\KaraokePlayer\settings.json`
 - **Database**: `%APPDATA%\KaraokePlayer\karaoke.db`
-- **Cache**: `%APPDATA%\KaraokePlayer\cache`
-- **Logs**: `%APPDATA%\KaraokePlayer\logs`
+- **Thumbnails**: `%APPDATA%\KaraokePlayer\Thumbnails`
+- **Logs**: `%APPDATA%\KaraokePlayer\Logs`
 - **Current Playlist**: `%APPDATA%\KaraokePlayer\current-playlist.json`
 
 ## Troubleshooting
@@ -210,9 +210,8 @@ Change style in Settings > Display > Visualization Style
 ### Common Issues
 
 **Application won't start**:
-- Verify .NET 10 Runtime is installed
 - Check Windows Event Viewer for error details
-- Review log files in `%APPDATA%\KaraokePlayer\logs`
+- Review log files in `%APPDATA%\KaraokePlayer\Logs`
 
 **Video playback issues**:
 - Ensure graphics drivers are up to date

@@ -1,4 +1,4 @@
-; Karaoke Player Installer Script for Inno Setup
+﻿; Karaoke Player Installer Script for Inno Setup
 ; Requires Inno Setup 6.0 or later: https://jrsoftware.org/isinfo.php
 
 #define MyAppName "Karaoke Player"
@@ -54,22 +54,8 @@ Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Fil
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-function InitializeSetup(): Boolean;
-var
-  ResultCode: Integer;
-begin
-  Result := True;
-  
-  // Check if .NET 10 Runtime is installed
-  if not RegKeyExists(HKLM, 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost') then
-  begin
-    if MsgBox('.NET 10 Runtime is required but not installed. Would you like to download it now?', mbConfirmation, MB_YESNO) = IDYES then
-    begin
-      ShellExec('open', 'https://dotnet.microsoft.com/download/dotnet/10.0', '', '', SW_SHOW, ewNoWait, ResultCode);
-    end;
-    Result := False;
-  end;
-end;
+// No .NET runtime check: the application is published self-contained
+// (the runtime is included in the installed files).
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin

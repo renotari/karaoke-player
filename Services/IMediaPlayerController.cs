@@ -85,6 +85,9 @@ public interface IMediaPlayerController
     /// </summary>
     List<AudioDevice> GetAudioDevices();
 
+    /// <summary>Plays a short test tone on an audio device (empty id = system default).</summary>
+    void PlayTestTone(string deviceId);
+
     /// <summary>
     /// Toggles subtitle display on or off
     /// </summary>

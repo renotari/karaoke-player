@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -564,6 +565,56 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         }
 
         return devices;
+    }
+
+    public void PlayTestTone(string deviceId)
+    {
+        try
+        {
+            var path = Path.Combine(AppPaths.Cache, "test-tone.wav");
+            if (!File.Exists(path))
+                WriteTestTone(path);
+
+            var media = new Media(_libVLC, path, FromType.FromPath);
+            var player = new MediaPlayer(media) { Volume = (int)(Math.Max(_volume, 0.3f) * 100) };
+            player.Play();
+            if (!string.IsNullOrWhiteSpace(deviceId))
+                player.SetOutputDevice(deviceId);
+
+            // Dispose once the tone is over (not from a LibVLC callback)
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                Thread.Sleep(2500);
+                player.Stop();
+                player.Dispose();
+                media.Dispose();
+            });
+        }
+        catch (Exception ex)
+        {
+            _loggingService?.LogWarning($"Test tone failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>One second of a 440 Hz tone (16-bit mono WAV) with short fades.</summary>
+    private static void WriteTestTone(string path)
+    {
+        const int rate = 44100;
+        const int samples = rate;
+        using var stream = File.Create(path);
+        using var writer = new BinaryWriter(stream);
+        writer.Write("RIFF"u8.ToArray());
+        writer.Write(36 + samples * 2);
+        writer.Write("WAVEfmt "u8.ToArray());
+        writer.Write(16); writer.Write((short)1); writer.Write((short)1);
+        writer.Write(rate); writer.Write(rate * 2); writer.Write((short)2); writer.Write((short)16);
+        writer.Write("data"u8.ToArray());
+        writer.Write(samples * 2);
+        for (int i = 0; i < samples; i++)
+        {
+            var fade = Math.Min(1.0, Math.Min(i, samples - i) / (rate * 0.05));
+            writer.Write((short)(Math.Sin(2 * Math.PI * 440 * i / rate) * 12000 * fade));
+        }
     }
 
     /// <summary>The player currently rendering video.</summary>

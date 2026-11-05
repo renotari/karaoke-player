@@ -1,4 +1,4 @@
-# Deployment Guide
+﻿# Deployment Guide
 
 This guide covers building, packaging, and deploying the Karaoke Player application.
 
@@ -118,11 +118,10 @@ OutputBaseFilename=KaraokePlayer-Setup-{#MyAppVersion}
 **Test on a Clean System** (recommended):
 
 1. Use a clean Windows VM or test machine
-2. Ensure .NET 10 Runtime is NOT pre-installed (to test the installer check)
+2. Use a PC without the .NET runtime (the build is self-contained and must run anyway)
 3. Run `KaraokePlayer-Setup-1.0.0.exe`
 4. Follow the installation wizard
 5. Verify:
-   - .NET 10 Runtime check works
    - Application installs to correct location
    - Desktop/Start Menu shortcuts are created
    - Application launches successfully

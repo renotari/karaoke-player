@@ -190,12 +190,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void TestAudio()
     {
-        if (string.IsNullOrEmpty(SelectedAudioDevice))
+        if (_mediaPlayerController == null)
             return;
 
-        // TODO: Implement test audio functionality
-        // This would play a short test tone through the selected audio device
-        Console.WriteLine($"Testing audio on device: {SelectedAudioDevice}");
+        // The dialog lists device names; the controller wants the device id
+        var device = _mediaPlayerController.GetAudioDevices()
+            .FirstOrDefault(d => d.Name == SelectedAudioDevice);
+        _mediaPlayerController.PlayTestTone(device?.Id ?? string.Empty);
     }
 
     [RelayCommand]

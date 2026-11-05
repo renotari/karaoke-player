@@ -4,373 +4,87 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Karaoke Player is a professional Windows karaoke and media player built with .NET 10 and Avalonia UI. It supports multi-format playback (MP4, MKV, WEBM, MP3), features crossfade transitions, audio visualizations, and flexible single/dual-screen display modes optimized for large media libraries (30,000+ files).
+Karaoke Player is a Windows karaoke and media player built with .NET 10 and Avalonia UI. It plays video (MP4, MKV, WEBM) and audio (MP3) files from a media folder, with a karaoke-style queue, crossfade, music-reactive visualizations for audio, single/dual-screen modes, and it is meant for large libraries (30,000+ files).
 
 **Technology Stack:**
-- Framework: .NET 10 (C#)
-- UI: Avalonia UI 11.3 (MVVM pattern with ReactiveUI)
-- Media Engine: LibVLCSharp 3.9
-- Database: SQLite with Entity Framework Core 9.0
-- Graphics: SkiaSharp 3.119
-- Metadata: TagLib# (audio and video containers)
+- Framework: .NET 10 (C#), self-contained publish for win-x64
+- UI: Avalonia UI 11.3, MVVM with CommunityToolkit.Mvvm (ReactiveUI only for search throttling and MessageBus)
+- Media: LibVLCSharp 3.9 / LibVLC 3.0
+- Database: SQLite with Entity Framework Core 10
+- Images: SkiaSharp 3 (thumbnails)
+- Metadata: TagLib# (audio and video containers; falls back to file-name parsing)
 
 ## Build and Development Commands
 
-### Cross-platform development (Linux)
-
-The app targets Windows, but the project also builds and runs on Linux for development:
-on Linux the build targets the host platform and uses the system libvlc
-(`sudo apt install dotnet-sdk-10.0 vlc libvlc-dev`). The Windows-only bits
-(`win-x64` RID, self-contained, ReadyToRun, `VideoLAN.LibVLC.Windows`) are enabled
-when building on Windows or when passing `-r win-x64`.
+The app targets Windows, but development happens on Linux (Ubuntu 26.04): the project builds and runs there too. On Linux the build targets the host platform and uses the system libvlc (`sudo apt install dotnet-sdk-10.0 vlc libvlc-dev`). The Windows-only bits (`win-x64` RID, self-contained, ReadyToRun, `VideoLAN.LibVLC.Windows`) are enabled when building on Windows or when passing `-r win-x64`.
 
 ```bash
-dotnet build                                   # Linux build for local testing
-dotnet publish -c Release -r win-x64           # Windows build, cross-compiled from Linux
+dotnet build                                   # build (Linux: for local testing)
+dotnet run                                     # run the app
+dotnet run -- --test                           # service tests (TestRunner)
+dotnet run -- --unit-tests                     # unit tests (RunUnitTests)
+dotnet publish -c Release -r win-x64           # Windows build, also cross-compiled from Linux
+build-release.bat / build-installer.bat        # Windows: release build / Inno Setup installer
 ```
 
-### Building the Application
+Tests are plain runner classes (no xUnit): `Services/*Test.cs`, orchestrated by `TestRunner.cs`, `RunUnitTests.cs`, `IntegrationTests.cs`. Test modes set `KARAOKE_PLAYER_DATA_DIR` to a temporary folder (see `Program.cs`), so they never touch the real user data. The compiler must stay at 0 warnings.
 
-```bash
-# Restore dependencies
-dotnet restore
+### Running the GUI without a display (sandbox)
 
-# Build debug version
-dotnet build
+`xvfb`, `xdotool` and `imagemagick` are installed: run the app on `DISPLAY=:99` (`Xvfb :99 -screen 0 1600x900x24 &`), drive it with `xdotool`, screenshot with `import -window root shot.png`. There is no audio device there: start the app with `KARAOKE_PLAYER_VLC_OPTIONS="--aout=dummy"` or audio visualizations stay black.
 
-# Build release version
-dotnet build --configuration Release
+## Architecture
 
-# Publish self-contained Windows x64 build
-dotnet publish -c Release -r win-x64 --self-contained
+### Startup and wiring (`App.axaml.cs`)
 
-# Using the build scripts (Windows)
-build-release.bat          # Builds release version
-build-installer.bat        # Creates installer (requires Inno Setup)
-```
+`App` creates every service by hand (`InitializeServices`) and the `MainWindowViewModel`. It also owns everything that is about windows rather than ViewModel state:
+- `ApplySettings(AppSettings)`: applies theme, font size, volume, auto-play, shuffle mode, crossfade, audio normalization, visualization, audio device, keyboard shortcuts, display mode and media folder. Called at startup and on every `SettingsChanged` (the Settings dialog, the folder picker...). Changing the media folder triggers `ScanMediaDirectoryAsync` (incremental scan + monitoring + background metadata/thumbnail queues).
+- Fullscreen and dual screen: reacts to `IsFullscreen` / `IsDualScreenMode` on the ViewModel, opens/closes `PlaybackWindow` (on a second monitor when present).
+- Window layout (position, size, column widths) saved on exit, restored at startup.
+- Global keyboard shortcuts (`KeyboardShortcutManager`), skipped while typing in a TextBox.
 
-### Running Tests
+**Never block the UI thread on async code** (`.GetAwaiter().GetResult()`, `.Wait()`): it deadlocks (it once made the app hang on exit). Use `Task.Run(...)` if a sync wait is unavoidable.
 
-The project includes comprehensive unit and integration tests embedded in the codebase:
+### Threading rules
 
-```bash
-# Run all unit tests (Task 31)
-dotnet run -- --unit-tests
+- LibVLC, `FileSystemWatcher` and timers raise events on background threads. `MainWindowViewModel.OnUiThread` marshals them to the UI thread; do the same for any new event handler that touches bound state.
+- Throttled search uses `ViewModelBase.UiScheduler` (Avalonia's synchronization context), not `RxApp.MainThreadScheduler` (not bound to Avalonia without the ReactiveUI.Avalonia package).
+- Never call LibVLC from a LibVLC event callback (move it to the thread pool).
 
-# Run integration tests (Task 28)
-dotnet run -- --test
-```
+### Playback (`Services/MediaPlayerController.cs`)
 
-**Note:** Tests are implemented as separate runner classes (e.g., `RunUnitTests.cs`, `RunIntegrationTests.cs`) rather than using a traditional test framework. Test files follow naming patterns: `*Test.cs` (unit tests), `Verify*.cs`, `Test*.cs` (integration tests).
+- Two slots, each with its own native video surface (`EmbeddedVideoView`, a `NativeControlHost` that exposes its handle). LibVLC cannot reuse a window another player is still using, so each slot renders into its own surface and the UI shows the one of `ActivePlayerIndex` (`IsVideoSurfaceA/BVisible`).
+- Each slot has a player for video/plain audio and, created on demand, a player from a second `LibVLC` instance started with `--audio-visual=visual --effect-list=...`: audio visualizations are an instance-level option (per-media options are ignored, and on the main instance they would add a visualization window to videos).
+- Crossfade: the ViewModel keeps the next song preloaded (`PreloadNextAsync` / `ClearPreload`); near the end the controller starts the other slot, makes it the current one immediately (`CrossfadeStarted` event, no `MediaEnded` for the outgoing song) and fades the two volumes. Events from non-current players are ignored.
+- LibVLCSharp raises events with its internal event manager as `sender`: handlers are bound per player with closures (`Subscribe`).
+- `KARAOKE_PLAYER_VLC_OPTIONS` adds LibVLC command-line options (troubleshooting).
+- Nothing can be drawn by Avalonia on top of a native video surface: overlays go next to it (e.g. the title strip under audio visualizations, the Video Mode panel below the video).
 
-### Running the Application
+### Playlist model (`MainWindowViewModel` + `PlaylistManager`)
 
-```bash
-# Standard run
-dotnet run
+Karaoke queue: `CurrentPlaylist[0]` is the song playing (while `CurrentSong != null`), the rest is the queue. A finished/skipped song leaves the list and goes to a history used by Previous. "Next" inserts after the song playing (on top when idle). `PlaylistManager` is the single source of truth: commands call it, and `CurrentPlaylist` is rebuilt from its `PlaylistChanged` event. The playlist is auto-saved to `current-playlist.json`.
 
-# Run with specific arguments
-dotnet run -- --test         # Test mode
-dotnet run -- --unit-tests   # Unit test mode
-```
+### Library
 
-## Architecture and Code Structure
+`MediaLibraryManager` scans/monitors the folder and raises `FilesAdded/Removed/Modified`; `MetadataExtractor` and `ThumbnailGenerator` process queues in the background and raise events; the ViewModel updates every instance of the file (`MediaFile` implements `INotifyPropertyChanged` via `NotifyChanged()`). Thumbnails are decoded off-screen with LibVLC video callbacks and saved with SkiaSharp; `ThumbnailConverter` turns the path into a bitmap. `MediaFile.DisplayArtist/DisplayTitle/DisplayName` fall back to `FilenameParser` when metadata is missing.
 
-### Application Entry Points
+### Views
 
-**Program.cs**: Main entry point that handles command-line arguments and initializes Avalonia. Supports `--test` and `--unit-tests` flags for running test suites.
+- `MainWindow`: catalog, video area, playlist; Video Mode hides the side columns; in dual screen the center shows a panel instead of the video.
+- `PlaybackWindow`: dual-screen audience window, bound to the same `MainWindowViewModel`.
+- `SettingsWindow` (`SettingsViewModel` gets the dialog as owner), `PlaylistComposerWindow` (its ViewModel needs `SetWindow`), `WelcomeDialog` (first run).
+- Time values are seconds (`double`): format them with `SecondsToTimeConverter`, not `StringFormat`.
 
-**App.axaml.cs**: Application lifecycle manager that:
-- Initializes all services in dependency injection pattern
-- Configures SQLite database with performance optimizations (WAL mode, shared cache, connection pooling)
-- Sets up LibVLC for media playback
-- Manages first-run welcome dialog flow
-- Handles application shutdown and resource cleanup
+### Data locations (`Services/AppPaths.cs`)
 
-### Service Architecture (Dependency Injection Pattern)
+`%APPDATA%\KaraokePlayer\` on Windows, `~/.config/KaraokePlayer/` on Linux (override: `KARAOKE_PLAYER_DATA_DIR`): `settings.json`, `karaoke.db`, `current-playlist.json`, `Logs/`, `Thumbnails/`, `Playlists/`. `AppSettings` is also an EF entity: new settings that live only in the JSON must be `[NotMapped]` (otherwise a migration is needed), and must be copied in `SettingsViewModel.CloneSettings`.
 
-All services follow interface-based design located in the `Services/` directory:
+### Not wired yet
 
-**Core Services:**
-- `IMediaPlayerController` / `MediaPlayerController`: Manages LibVLC playback, crossfade transitions, audio/video control
-- `IMediaLibraryManager` / `MediaLibraryManager`: Scans directories, monitors file changes, manages media database
-- `IPlaylistManager` / `PlaylistManager`: Handles playlist operations, persistence, M3U import/export
-- `ISearchEngine` / `SearchEngine`: Optimized search across large catalogs with partial matching and history
-
-**Media Processing:**
-- `IMetadataExtractor` / `MetadataExtractor`: Extracts metadata using TagLib# (falls back to file name parsing)
-- `IThumbnailGenerator` / `ThumbnailGenerator`: Generates video thumbnails using LibVLC
-- `ICacheManager` / `CacheManager`: Manages thumbnail and metadata caching
-
-**UI Services:**
-- `IWindowManager` / `WindowManager`: Manages single/dual screen modes and window lifecycle
-- `INotificationService` / `NotificationService`: Toast notification system
-- `IKeyboardShortcutManager` / `KeyboardShortcutManager`: Global keyboard shortcut handling
-- `IAudioVisualizationEngine` / `AudioVisualizationEngine`: Audio visualizations using SkiaSharp
-
-**Infrastructure:**
-- `ISettingsManager` / `SettingsManager`: Persists user settings to JSON
-- `ILoggingService` / `LoggingService`: Application logging to files
-- `IErrorHandlingService` / `ErrorHandlingService`: Centralized error handling and recovery
-
-Services are instantiated in `App.axaml.cs.InitializeServices()` and injected into ViewModels.
-
-### MVVM Architecture
-
-**Models** (`Models/`):
-- `MediaFile`: Core media entity with file info, metadata, thumbnail paths
-- `PlaylistItem`: Playlist entry with position and metadata
-- `AppSettings`: Application settings data model
-- `KaraokeDbContext`: EF Core DbContext with performance indexes
-- `MediaError`, `ToastNotification`, `SearchHistory`: Supporting models
-
-**ViewModels** (`ViewModels/`):
-- `MainWindowViewModel`: Primary VM for single-screen mode, coordinates all features
-- `PlaybackWindowViewModel`: VM for dual-screen playback window
-- `SettingsViewModel`: Settings management UI
-- `PlaylistComposerViewModel`: Playlist composition tool
-- `PlaylistItemViewModel`: Individual playlist item representation
-- All VMs inherit from `ViewModelBase` and use ReactiveUI for property change notifications
-
-**Views** (`Views/`):
-- `MainWindow`: Main single-screen interface
-- `PlaybackWindow`: Dual-screen playback window
-- `ControlWindow`: Dual-screen control window
-- `SettingsWindow`: Settings dialog
-- `PlaylistComposerWindow`: Playlist composition tool
-- `WelcomeDialog`: First-run setup dialog
-- Custom controls: `PlaylistItemControl`, `ToastNotificationControl`, `ToastNotificationContainer`
-
-### Database and Entity Framework
-
-**Database Location:** `%APPDATA%\KaraokePlayer\karaoke.db`
-
-**Migrations:** Located in `Models/Migrations/`
-- Initial schema: `20251105191301_InitialCreate`
-- Performance indexes: `20251111200852_AddPerformanceIndexes`
-
-**Performance Optimizations:**
-- WAL (Write-Ahead Logging) mode enabled
-- Connection pooling and shared cache
-- Indexes on `FilePath`, `Artist`, `Title`, `FileName` for fast search
-- 64MB cache size, memory temp storage
-
-**Creating Migrations:**
-```bash
-# Add new migration
-dotnet ef migrations add MigrationName
-
-# Update database
-dotnet ef database update
-
-# Generate SQL script
-dotnet ef migrations script
-```
-
-**Note:** `KaraokeDbContextFactory` provides design-time support for EF Core tooling.
-
-### LibVLC Integration
-
-LibVLC binaries are automatically copied to output via `.csproj` configuration:
-- Native libraries located in `libvlc/` subdirectory of output
-- Must NOT use `PublishSingleFile=true` due to LibVLC native dependencies
-- Core.Initialize() called in `App.axaml.cs` before any media operations
-
-## Key Implementation Patterns
-
-### MVVM Framework - Hybrid Approach
-
-The project uses a **hybrid MVVM approach** combining:
-- **CommunityToolkit.Mvvm** for properties and commands (primary framework)
-- **ReactiveUI** for throttled search functionality only (minimal usage)
-
-**CommunityToolkit.Mvvm Features Used:**
-- `[ObservableProperty]` source generators for automatic property generation
-- `[RelayCommand]` attributes for command generation with CanExecute support
-- `ObservableObject` base class for property change notifications
-
-**ReactiveUI Features Used (Limited):**
-- `WhenAnyValue().Throttle()` for search query throttling (3 instances)
-- MessageBus for cross-window communication (PlaybackWindowViewModel only)
-
-**Example - Property Declaration:**
-```csharp
-[ObservableProperty]
-private string _searchQuery = string.Empty;
-// Auto-generates: public string SearchQuery { get; set; } with INotifyPropertyChanged
-```
-
-**Example - Command Declaration:**
-```csharp
-[RelayCommand]
-private async Task Play()
-{
-    // Command implementation
-}
-// Auto-generates: public IAsyncRelayCommand PlayCommand { get; }
-```
-
-**Example - Throttled Search (ReactiveUI):**
-```csharp
-var throttledSearch = this.WhenAnyValue(x => x.SearchQuery)
-    .Throttle(TimeSpan.FromMilliseconds(300))
-    .ObserveOn(RxApp.MainThreadScheduler)
-    .Subscribe(async query => await PerformSearch(query));
-_disposables.Add(throttledSearch); // Proper disposal management
-```
-
-### Background Processing Pattern
-
-Metadata extraction and thumbnail generation use producer-consumer queues:
-- `QueueForExtraction()` / `QueueForGeneration()` add items to queue
-- `StartProcessing()` begins background processing
-- `StopProcessing()` cleanly shuts down workers
-
-### Window Management Modes
-
-The application supports two primary display modes managed by `WindowManager`:
-
-**Single Screen Mode:**
-- Main window contains video player, catalog, and playlist
-- Can toggle to "Video Mode" for maximized video with collapsible control handle
-- Default mode for single-monitor setups
-
-**Dual Screen Mode:**
-- Playback window (full-screen video) on secondary monitor
-- Control window (catalog + playlist) on primary monitor
-- Activated via `Ctrl+D` or Settings
-
-### Crossfade Implementation
-
-Crossfade uses dual LibVLC MediaPlayer instances:
-- Primary player for current track
-- Secondary player for next track
-- Synchronized volume fade over configurable duration (1-20 seconds)
-- Video crossfade achieved through opacity transitions
-
-## File Locations and Configuration
-
-### User Data Directories
-
-- **Application Data:** `%APPDATA%\KaraokePlayer\`
-- **Settings:** `%APPDATA%\KaraokePlayer\settings.json`
-- **Database:** `%APPDATA%\KaraokePlayer\karaoke.db`
-- **Cache:** `%APPDATA%\KaraokePlayer\cache\`
-- **Logs:** `%APPDATA%\KaraokePlayer\logs\`
-- **Playlists:** `%APPDATA%\KaraokePlayer\current-playlist.json`
-
-### Assets
-
-- **Application Icon:** `Assets\avalonia-logo.ico`
-- **Other assets:** `Assets\**` (included as AvaloniaResource)
-
-## Common Development Patterns
-
-### Adding a New Service
-
-1. Create interface in `Services/IYourService.cs`
-2. Implement in `Services/YourService.cs`
-3. Add unit test class in `Services/YourServiceTest.cs`
-4. Register in `App.axaml.cs.InitializeServices()`
-5. Inject into ViewModels as needed
-
-### Adding a New Window/Dialog
-
-1. Create AXAML in `Views/YourWindow.axaml`
-2. Create code-behind in `Views/YourWindow.axaml.cs`
-3. Create ViewModel in `ViewModels/YourWindowViewModel.cs`
-4. Use `WindowManager` for window lifecycle or show directly with `ShowDialog()`
-
-### Adding Database Entities
-
-1. Add model class in `Models/YourEntity.cs`
-2. Add DbSet to `KaraokeDbContext`
-3. Create migration: `dotnet ef migrations add AddYourEntity`
-4. Update database: `dotnet ef database update`
-5. Add corresponding service methods for CRUD operations
-
-### Working with Media Files
-
-Always access media files through `IMediaLibraryManager` to ensure:
-- Database consistency
-- Metadata is loaded
-- Thumbnails are generated
-- File system monitoring is active
-
-## Performance Considerations
-
-The application is optimized for large libraries (30,000+ files):
-
-- **Search Speed:** < 300ms for searches across entire catalog
-- **UI Responsiveness:** < 100ms for all interactions
-- **Startup Time:** < 2 seconds
-- **Memory Usage:** < 300MB with 10,000 files loaded
-
-**Optimization Techniques:**
-- Lazy loading of thumbnails via `LazyThumbnailLoader`
-- Database indexes on frequently queried fields
-- Background processing for heavy operations
-- Connection pooling and SQLite optimizations
-- PerformanceMonitor class for tracking bottlenecks
-
-## Testing Strategy
-
-Tests are organized as standalone runner classes rather than using xUnit/NUnit:
-
-**Unit Tests** (Task 31):
-- Located in `Services/*Test.cs` files
-- Run via `RunUnitTests.cs` orchestrator
-- Each service has corresponding test file
-- Tests use in-memory database where applicable
-
-**Integration Tests** (Task 28):
-- Located in `IntegrationTests.cs`
-- Run via `RunIntegrationTests.cs` orchestrator
-- Test end-to-end scenarios across multiple services
-- Verify UI integration and window lifecycle
-
-**Verification Tests:**
-- Files named `Verify*.cs` test specific features
-- Files named `Test*.cs` test individual components
-
-When adding tests, follow existing patterns and register in the appropriate test runner.
+- `CacheManager` (created, not used) and the Performance settings (`PreloadBufferSize`, `CacheSize`): no effect yet.
+- `ErrorHandlingService` is only used to clear error states at startup.
+- The Playlist Composer drag-and-drop uses Avalonia's legacy `DataObject` API (warnings suppressed in that file).
 
 ## Installer and Deployment
 
-**Installer Script:** `Setup.iss` (Inno Setup format)
-- Creates Windows installer with .NET 10 runtime check
-- Installs to `C:\Program Files\Karaoke Player`
-- Creates desktop and start menu shortcuts
-- Handles application data directory setup
-
-**Build Process:**
-1. Run `build-release.bat` to create release build
-2. Run `build-installer.bat` to generate installer (requires Inno Setup)
-3. Output: `installer\KaraokePlayer-Setup-1.0.0.exe`
-
-**Version Updates:** When bumping version, update:
-- `KaraokePlayer.csproj` (Version, AssemblyVersion, FileVersion)
-- `Setup.iss` (MyAppVersion)
-- `README.md` (version badge)
-
-See `docs/DEPLOYMENT.md` for comprehensive deployment guide.
-
-## Debugging Tips
-
-**Avalonia DevTools:** Press F12 in Debug build to open Avalonia DevTools for UI inspection and debugging.
-
-**Logging:** All services use `ILoggingService` - check logs at `%APPDATA%\KaraokePlayer\logs\` for detailed diagnostics.
-
-**Common Issues:**
-- LibVLC playback issues: Ensure `libvlc/` folder exists in output directory with all native DLLs
-- Database lock errors: Check WAL mode is enabled, use connection pooling
-- UI freezing: Ensure heavy operations run on background threads, not UI thread
-- Settings not persisting: Verify `%APPDATA%\KaraokePlayer\` directory has write permissions
-
-## Additional Documentation
-
-- **Quick Start:** `docs/QUICKSTART.md`
-- **Deployment Guide:** `docs/DEPLOYMENT.md`
-- **Manual Testing:** `docs/MANUAL_TESTING_GUIDE.md`
-- **Unit Tests Summary:** `docs/UNIT_TESTS_TASK31_SUMMARY.md`
-- **Integration Tests Summary:** `docs/INTEGRATION_TESTS_SUMMARY.md`
+`Setup.iss` (Inno Setup) packages `bin\Release\net10.0\win-x64\publish\` (self-contained: no .NET runtime needed on the target PC). When bumping the version update `KaraokePlayer.csproj`, `Setup.iss` and `README.md`. See `docs/DEPLOYMENT.md`.
