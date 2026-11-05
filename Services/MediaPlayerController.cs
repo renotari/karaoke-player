@@ -822,6 +822,10 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     {
         if (!IsActive(sender)) return;
         State = PlaybackState.Playing;
+
+        // Subtitles off: disable the track the new media selected by default
+        if (!_subtitlesEnabled && sender is MediaPlayer playing)
+            ThreadPool.QueueUserWorkItem(_ => { try { playing.SetSpu(-1); } catch { } });
         _loggingService?.LogPlaybackEvent("Playing", $"File: {_currentMedia?.Filename ?? "Unknown"}");
     }
 

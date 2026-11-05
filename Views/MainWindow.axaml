@@ -77,6 +77,8 @@
                 <MenuItem Header="_Stop" Command="{Binding StopCommand}" />
                 <MenuItem Header="_Next" Command="{Binding NextCommand}" />
                 <MenuItem Header="_Previous" Command="{Binding PreviousCommand}" />
+                <Separator />
+                <MenuItem Header="S_ubtitles" ToggleType="CheckBox" IsChecked="{Binding SubtitlesEnabled}" />
             </MenuItem>
             <MenuItem Header="_Settings">
                 <MenuItem Header="_Preferences..." Command="{Binding OpenSettingsCommand}" />
@@ -609,7 +611,8 @@
                     <Slider Value="{Binding CurrentTime}"
                             Minimum="0"
                             Maximum="{Binding Duration}"
-                            IsEnabled="{Binding IsPlaying}"
+                            IsEnabled="{Binding !IsIdle}"
+                            ToolTip.Tip="Click or drag to move within the song"
                             Margin="0,0,0,4"
                             TabIndex="14"
                             IsTabStop="True"/>

@@ -224,6 +224,33 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>True when nothing is playing (the waiting screen is shown).</summary>
     public bool IsIdle => CurrentSong == null;
 
+    // ----- Seek and subtitles ---------------------------------------------------
+
+    private bool _updatingPositionFromPlayer;
+
+    /// <summary>
+    /// The position slider is bound to CurrentTime: a change that does not come
+    /// from the player is the user dragging the slider, so seek there.
+    /// </summary>
+    partial void OnCurrentTimeChanged(double value)
+    {
+        if (_updatingPositionFromPlayer || !IsSongLoaded || _mediaPlayerController == null)
+            return;
+
+        if (Math.Abs(value - _mediaPlayerController.CurrentTime) > 1.0)
+            _mediaPlayerController.Seek(value);
+    }
+
+    /// <summary>Embedded subtitles of video files (Playback menu).</summary>
+    [ObservableProperty]
+    private bool _subtitlesEnabled = true;
+
+    partial void OnSubtitlesEnabledChanged(bool value)
+    {
+        _mediaPlayerController?.ToggleSubtitles(value);
+        StatusMessage = value ? "Subtitles on" : "Subtitles off";
+    }
+
     /// <summary>Native windows the two players render video into (from the view).</summary>
     public void AttachVideoWindows(IntPtr first, IntPtr second) => _mediaPlayerController?.AttachVideoWindows(first, second);
 
@@ -601,8 +628,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             await _playlistManager.InsertSongAsync(e.To, 0);
 
         var top = _playlistManager.GetCurrentPlaylist().FirstOrDefault()?.MediaFile ?? e.To;
+        _updatingPositionFromPlayer = true;
         CurrentTime = 0;
         Duration = top.Metadata?.Duration ?? 0;
+        _updatingPositionFromPlayer = false;
         CurrentSong = top;
         MarkCurrentlyPlaying();
         await ApplyShuffleModeAsync();
@@ -778,8 +807,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             if (_preloadedId == top.Id)
                 _preloadedId = null; // the controller drops the preload when it is played directly
 
+            _updatingPositionFromPlayer = true;
             CurrentTime = 0;
             Duration = top.Metadata?.Duration ?? 0;
+            _updatingPositionFromPlayer = false;
             CurrentSong = top;
             MarkCurrentlyPlaying();
             await _mediaPlayerController.PlayAsync(top);
@@ -884,8 +915,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void HandlePlaybackTimeChanged(TimeChangedEventArgs e)
     {
+        _updatingPositionFromPlayer = true;
         CurrentTime = e.CurrentTime;
         Duration = e.Duration;
+        _updatingPositionFromPlayer = false;
     }
 
     private void OnMediaEnded(object? sender, MediaEndedEventArgs e)
