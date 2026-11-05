@@ -29,7 +29,6 @@ public class IntegrationTests
     private INotificationService? _notificationService;
     private IErrorHandlingService? _errorHandlingService;
     private ILoggingService? _loggingService;
-    private IWindowManager? _windowManager;
     private ICacheManager? _cacheManager;
     private MainWindowViewModel? _mainWindowViewModel;
     private string _testDbPath = "";
@@ -48,7 +47,6 @@ public class IntegrationTests
             await TestErrorHandlingIntegration();
             await TestSettingsIntegration();
             await TestCacheIntegration();
-            await TestWindowManagerIntegration();
             
             Console.WriteLine("\n=== All Integration Tests Passed ===");
         }
@@ -82,7 +80,6 @@ public class IntegrationTests
         if (_thumbnailGenerator == null) throw new Exception("ThumbnailGenerator not initialized");
         if (_keyboardShortcutManager == null) throw new Exception("KeyboardShortcutManager not initialized");
         if (_cacheManager == null) throw new Exception("CacheManager not initialized");
-        if (_windowManager == null) throw new Exception("WindowManager not initialized");
         
         Console.WriteLine("✓ All services initialized successfully\n");
     }
@@ -336,20 +333,6 @@ public class IntegrationTests
         Console.WriteLine("✓ Cache integration completed\n");
     }
 
-    private async Task TestWindowManagerIntegration()
-    {
-        Console.WriteLine("Test 9: Window Manager Integration");
-        
-        // Test window manager
-        // Note: We can't actually test window creation or mode in a console app,
-        // but we can verify the service is properly initialized
-        
-        if (_windowManager == null) throw new Exception("WindowManager not initialized");
-        
-        Console.WriteLine("✓ Window manager service initialized");
-        Console.WriteLine("✓ Window manager integration completed\n");
-    }
-
     private void InitializeServices()
     {
         try
@@ -393,8 +376,6 @@ public class IntegrationTests
             
             var cacheDirectory = Path.Combine(Path.GetTempPath(), "KaraokePlayerTest_Cache_" + Guid.NewGuid().ToString());
             _cacheManager = new CacheManager(cacheDirectory);
-            
-            _windowManager = new WindowManager(_settingsManager);
 
             _errorHandlingService.ClearAllErrors();
             
