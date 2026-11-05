@@ -470,6 +470,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
                 "waveform" => 1,
                 "circular" => 2,
                 "particles" => 3,
+                "none" => 4,
                 _ => 0
             };
 
@@ -510,6 +511,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             1 => "waveform",
             2 => "circular",
             3 => "particles",
+            4 => "none",
             _ => "bars"
         };
 

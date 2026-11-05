@@ -26,8 +26,19 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     public const string DefaultAudioDeviceName = "Default Audio Device";
 
     private readonly LibVLC _libVLC;
+    // Two "slots" (one video surface each). Each slot has a player for video/plain
+    // audio and, created on demand, a player from a second LibVLC instance configured
+    // with an audio visualization (LibVLC only accepts that option per instance:
+    // set on the main one it would also open a visualization window for videos).
     private readonly MediaPlayer[] _players;
-    private int _active; // index of the active player in _players
+    private readonly MediaPlayer?[] _visualPlayers = new MediaPlayer?[2];
+    private LibVLC? _visualLibVLC;
+    private string? _visualLibVLCEffect;
+    private readonly string[] _extraVlcOptions;
+    private int _active; // slot of the current song
+    private MediaPlayer _current;        // player of the current song
+    private MediaPlayer? _preloadPlayer; // player holding the preloaded song
+    private MediaPlayer? _outgoing;      // player fading out during a crossfade
     private readonly ILoggingService? _loggingService;
     // _sync guards player/crossfade state. LibVLC event handlers must never take it:
     // Stop() blocks until LibVLC has delivered its events, so a handler waiting on
@@ -58,7 +69,15 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         _loggingService = loggingService;
 
         Core.Initialize();
-        _libVLC = new LibVLC("--no-video-title-show");
+        // Extra LibVLC options for troubleshooting, e.g. KARAOKE_PLAYER_VLC_OPTIONS="--verbose=2"
+        var extra = Environment.GetEnvironmentVariable("KARAOKE_PLAYER_VLC_OPTIONS");
+        _extraVlcOptions = string.IsNullOrWhiteSpace(extra)
+            ? Array.Empty<string>()
+            : extra.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        var options = new List<string> { "--no-video-title-show" };
+        options.AddRange(_extraVlcOptions);
+        _libVLC = new LibVLC(options.ToArray());
 
         _players = new[] { new MediaPlayer(_libVLC), new MediaPlayer(_libVLC) };
         foreach (var player in _players)
@@ -66,8 +85,9 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
             Subscribe(player);
         }
 
-        Active.Volume = (int)(_volume * 100);
-        Other.Volume = 0;
+        _current = _players[0];
+        _current.Volume = (int)(_volume * 100);
+        _players[1].Volume = 0;
 
         _loggingService?.LogInformation("MediaPlayerController initialized");
     }
@@ -106,9 +126,78 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         });
     }
 
-    private MediaPlayer Active => _players[_active];
-    private MediaPlayer Other => _players[1 - _active];
-    private bool IsActive(object? sender) => ReferenceEquals(sender, Active);
+    private MediaPlayer Active => _current;
+    private bool IsActive(object? sender) => ReferenceEquals(sender, _current);
+
+    private IEnumerable<MediaPlayer> AllPlayers()
+    {
+        foreach (var p in _players) yield return p;
+        foreach (var p in _visualPlayers) if (p != null) yield return p;
+    }
+
+    /// <summary>
+    /// Player of a slot for a media file: audio files use the visualization player
+    /// when a visualization is selected. Must be called with _sync held.
+    /// </summary>
+    private MediaPlayer PlayerFor(int slot, MediaFile mediaFile)
+    {
+        var effect = mediaFile.Type == Models.MediaType.Audio ? VisualEffectFor(AudioVisualization) : null;
+        if (effect == null)
+            return _players[slot];
+
+        EnsureVisualLibVLC(effect);
+        if (_visualPlayers[slot] == null)
+        {
+            var player = new MediaPlayer(_visualLibVLC!);
+            Subscribe(player);
+            var window = slot == 0 ? _videoWindows.First : _videoWindows.Second;
+            if (window != IntPtr.Zero)
+                SetVideoWindow(player, window);
+            ApplyAudioDevice(player);
+            _visualPlayers[slot] = player;
+        }
+        return _visualPlayers[slot]!;
+    }
+
+    /// <summary>(Re)creates the visualization LibVLC instance when the effect changed and it is idle.</summary>
+    private void EnsureVisualLibVLC(string effect)
+    {
+        if (_visualLibVLC != null && _visualLibVLCEffect == effect)
+            return;
+
+        if (_visualLibVLC != null)
+        {
+            // Keep the old effect while one of its players is in use
+            foreach (var p in _visualPlayers)
+            {
+                if (p != null && (ReferenceEquals(p, _current) || ReferenceEquals(p, _preloadPlayer) || ReferenceEquals(p, _outgoing)))
+                    return;
+            }
+
+            for (int i = 0; i < _visualPlayers.Length; i++)
+            {
+                var p = _visualPlayers[i];
+                if (p == null) continue;
+                _visualPlayers[i] = null;
+                p.Stop();
+                p.Media?.Dispose();
+                p.Dispose();
+            }
+            _visualLibVLC.Dispose();
+        }
+
+        var options = new List<string>
+        {
+            "--no-video-title-show",
+            "--audio-visual=visual",
+            $"--effect-list={effect}",
+            "--effect-width=1280",
+            "--effect-height=720"
+        };
+        options.AddRange(_extraVlcOptions);
+        _visualLibVLC = new LibVLC(options.ToArray());
+        _visualLibVLCEffect = effect;
+    }
 
     #region Properties and events
 
@@ -158,6 +247,18 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
 
     public bool AudioNormalizationEnabled { get; set; }
 
+    public string AudioVisualization { get; set; } = "bars";
+
+    /// <summary>LibVLC "visual" module effect for a visualization setting (null = none).</summary>
+    private static string? VisualEffectFor(string? style) => style?.ToLowerInvariant() switch
+    {
+        "none" => null,
+        "waveform" => "scope",
+        "circular" => "spectrometer",
+        "particles" => "vuMeter",
+        _ => "spectrum"
+    };
+
     public event EventHandler<PlaybackStateChangedEventArgs>? StateChanged;
     public event EventHandler<TimeChangedEventArgs>? TimeChanged;
     public event EventHandler<MediaEndedEventArgs>? MediaEnded;
@@ -181,7 +282,12 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
                 {
                     CancelCrossfade();
 
-                    var player = Active;
+                    var player = PlayerFor(_active, mediaFile);
+                    if (!ReferenceEquals(player, _current))
+                    {
+                        _current.Stop();
+                        _current = player;
+                    }
                     player.Stop();
 
                     var previousMedia = player.Media;
@@ -312,7 +418,8 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
 
         if (mediaFile.Type == Models.MediaType.Audio)
         {
-            // Do not decode embedded cover art as a video track
+            // Embedded cover art is not shown as video; the visualization (if any)
+            // comes from the visualization LibVLC instance and is not affected
             media.AddOption(":no-video");
         }
 
@@ -342,9 +449,13 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
             _videoWindows = (first, second);
             SetVideoWindow(_players[0], first);
             SetVideoWindow(_players[1], second);
+            if (_visualPlayers[0] != null) SetVideoWindow(_visualPlayers[0]!, first);
+            if (_visualPlayers[1] != null) SetVideoWindow(_visualPlayers[1]!, second);
 
             // A video already playing keeps its old window until it restarts
-            if (_currentMedia?.Type == Models.MediaType.Video && Active.Media != null
+            var drawsVideo = _currentMedia?.Type == Models.MediaType.Video
+                || Array.IndexOf(_visualPlayers, Active) >= 0;
+            if (drawsVideo && Active.Media != null
                 && State is PlaybackState.Playing or PlaybackState.Paused)
             {
                 toRestart = Active;
@@ -410,7 +521,7 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     public void SetAudioDevice(string deviceId)
     {
         _audioDeviceId = string.IsNullOrWhiteSpace(deviceId) ? null : deviceId;
-        foreach (var player in _players)
+        foreach (var player in AllPlayers())
         {
             ApplyAudioDevice(player);
         }
@@ -506,10 +617,16 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
                         return;
                     }
 
-                    if (_preloadedMedia?.Id == mediaFile.Id && Other.Media != null)
+                    var target = PlayerFor(1 - _active, mediaFile);
+                    if (_preloadedMedia?.Id == mediaFile.Id && ReferenceEquals(target, _preloadPlayer) && target.Media != null)
                         return;
 
-                    LoadInto(Other, mediaFile);
+                    // The other kind of player of that slot must not keep a stale song
+                    if (_preloadPlayer != null && !ReferenceEquals(_preloadPlayer, target))
+                        _preloadPlayer.Stop();
+
+                    LoadInto(target, mediaFile);
+                    _preloadPlayer = target;
                 }
             }
             catch (Exception ex)
@@ -557,8 +674,10 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
             if (_crossfadeInProgress || _preloadedMedia == null || !_crossfadeEnabled || _disposed)
                 return;
 
-            var outgoing = Active;
-            var incoming = Other;
+            var outgoing = _current;
+            var incoming = _preloadPlayer;
+            if (incoming == null)
+                return;
 
             try
             {
@@ -577,6 +696,9 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
             to = _preloadedMedia;
 
             _active = 1 - _active;
+            _current = incoming;
+            _outgoing = outgoing;
+            _preloadPlayer = null;
             _currentMedia = to;
             _preloadedMedia = null;
             _crossfadeInProgress = true;
@@ -602,8 +724,9 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
 
             try
             {
-                Active.Volume = (int)(target * progress);       // incoming
-                Other.Volume = (int)(target * (1.0 - progress)); // outgoing
+                _current.Volume = (int)(target * progress);              // incoming
+                if (_outgoing != null)
+                    _outgoing.Volume = (int)(target * (1.0 - progress)); // outgoing
             }
             catch (Exception ex)
             {
@@ -631,11 +754,12 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         _crossfadeTimer = null;
         _crossfadeInProgress = false;
 
-        var outgoing = Other;
+        var outgoing = _outgoing;
+        _outgoing = null;
         // Stop on the thread pool: this may run on the timer thread, never on a LibVLC thread
         ThreadPool.QueueUserWorkItem(_ =>
         {
-            try { outgoing.Stop(); } catch { /* already stopped */ }
+            try { outgoing?.Stop(); } catch { /* already stopped */ }
         });
         Active.Volume = (int)(_volume * 100);
 
@@ -759,13 +883,14 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
             unsubscribe();
         }
 
-        foreach (var player in _players)
+        foreach (var player in AllPlayers())
         {
             player.Stop();
             player.Media?.Dispose();
             player.Dispose();
         }
 
+        _visualLibVLC?.Dispose();
         _libVLC.Dispose();
     }
 }

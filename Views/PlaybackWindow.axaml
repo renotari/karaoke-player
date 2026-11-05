@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:KaraokePlayer.ViewModels"
         xmlns:views="using:KaraokePlayer.Views"
@@ -15,7 +15,7 @@
         WindowStartupLocation="Manual">
 
     <!-- Dual screen: what the audience sees. Same ViewModel as the main window. -->
-    <Panel Background="Black">
+    <Grid Background="Black" RowDefinitions="*,Auto">
 
         <!-- Waiting screen -->
         <StackPanel HorizontalAlignment="Center"
@@ -41,7 +41,7 @@
                     VerticalAlignment="Center"
                     Spacing="16"
                     Margin="48"
-                    IsVisible="{Binding IsAudioContent}">
+                    IsVisible="{Binding ShowAudioInfoPanel}">
             <TextBlock Text="🎵" FontSize="96" HorizontalAlignment="Center"/>
             <TextBlock Text="{Binding CurrentSong.DisplayTitle, FallbackValue=''}"
                        Foreground="White"
@@ -61,5 +61,15 @@
         <!-- Video surfaces, one per player (see MainWindow) -->
         <views:EmbeddedVideoView x:Name="VideoViewA" IsVisible="{Binding IsVideoSurfaceAActive}"/>
         <views:EmbeddedVideoView x:Name="VideoViewB" IsVisible="{Binding IsVideoSurfaceBActive}"/>
-    </Panel>
+        <!-- Audio with visualization: title under the native surface -->
+        <Border Grid.Row="1" Background="Black" Padding="12,8"
+                IsVisible="{Binding ShowAudioTitleStrip}">
+            <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="12">
+                <TextBlock Text="{Binding CurrentSong.DisplayTitle, FallbackValue=''}"
+                           Foreground="White" FontSize="44" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding CurrentSong.DisplayArtist, FallbackValue=''}"
+                           Foreground="#CCFFFFFF" FontSize="32" VerticalAlignment="Bottom"/>
+            </StackPanel>
+        </Border>
+    </Grid>
 </Window>

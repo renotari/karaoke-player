@@ -117,6 +117,13 @@ public interface IMediaPlayerController
     bool AudioNormalizationEnabled { get; set; }
 
     /// <summary>
+    /// Visualization drawn by LibVLC in the video surface while an audio file plays
+    /// ("bars", "waveform", "circular", "particles"; "none" = no visualization).
+    /// Applies from the next song that starts.
+    /// </summary>
+    string AudioVisualization { get; set; }
+
+    /// <summary>
     /// Gets whether crossfade is currently enabled
     /// </summary>
     bool CrossfadeEnabled { get; }

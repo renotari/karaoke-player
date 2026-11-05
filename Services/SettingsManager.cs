@@ -269,10 +269,10 @@ public class SettingsManager : ReactiveObject, ISettingsManager
             case nameof(AppSettings.VisualizationStyle):
                 if (value is string style)
                 {
-                    var validStyles = new[] { "bars", "waveform", "circular", "particles" };
+                    var validStyles = new[] { "bars", "waveform", "circular", "particles", "none" };
                     if (!Array.Exists(validStyles, s => s.Equals(style, StringComparison.OrdinalIgnoreCase)))
                     {
-                        errorMessage = "Visualization style must be one of: bars, waveform, circular, particles";
+                        errorMessage = "Visualization style must be one of: bars, waveform, circular, particles, none";
                         return false;
                     }
                 }

@@ -208,6 +208,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsVideoSurfaceBVisible));
         OnPropertyChanged(nameof(IsVideoSurfaceAActive));
         OnPropertyChanged(nameof(IsVideoSurfaceBActive));
+        OnPropertyChanged(nameof(HasVisualOutput));
+        OnPropertyChanged(nameof(ShowAudioInfoPanel));
+        OnPropertyChanged(nameof(ShowAudioTitleStrip));
         OnPropertyChanged(nameof(NextSongInfo));
         OnPropertyChanged(nameof(HasNextSong));
     }
@@ -231,8 +234,26 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private int _activeVideoSurface;
 
     /// <summary>Which surface shows the video, wherever the surfaces are (playback window in dual screen).</summary>
-    public bool IsVideoSurfaceAActive => IsVideoContent && ActiveVideoSurface == 0;
-    public bool IsVideoSurfaceBActive => IsVideoContent && ActiveVideoSurface == 1;
+    public bool IsVideoSurfaceAActive => HasVisualOutput && ActiveVideoSurface == 0;
+    public bool IsVideoSurfaceBActive => HasVisualOutput && ActiveVideoSurface == 1;
+
+    /// <summary>
+    /// Audio visualization (setting): LibVLC draws it in the video surface. When off,
+    /// audio files show the title/artist panel instead.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasVisualOutput), nameof(ShowAudioInfoPanel), nameof(ShowAudioTitleStrip),
+        nameof(IsVideoSurfaceAActive), nameof(IsVideoSurfaceBActive),
+        nameof(IsVideoSurfaceAVisible), nameof(IsVideoSurfaceBVisible))]
+    private bool _audioVisualizationEnabled = true;
+
+    /// <summary>The current song draws into a video surface (video, or audio with visualization).</summary>
+    public bool HasVisualOutput => IsVideoContent || (IsAudioContent && AudioVisualizationEnabled);
+
+    public bool ShowAudioInfoPanel => IsAudioContent && !AudioVisualizationEnabled;
+
+    /// <summary>Title strip under the visualization (nothing can be drawn over the video surface).</summary>
+    public bool ShowAudioTitleStrip => IsAudioContent && AudioVisualizationEnabled;
 
     /// <summary>Surfaces of the main window: hidden in dual screen (the video is on the playback window).</summary>
     public bool IsVideoSurfaceAVisible => !IsDualScreenMode && IsVideoSurfaceAActive;

@@ -202,7 +202,7 @@
                     Background="Black"
                     Padding="0">
                 <Grid RowDefinitions="*,Auto">
-                    <Panel Grid.Row="0" Background="Black">
+                    <Grid Grid.Row="0" Background="Black" RowDefinitions="*,Auto">
                         <!-- Waiting screen (nothing playing) -->
                         <StackPanel HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
@@ -229,7 +229,7 @@
                                     VerticalAlignment="Center"
                                     Spacing="8"
                                     Margin="24"
-                                    IsVisible="{Binding IsAudioContent}">
+                                    IsVisible="{Binding ShowAudioInfoPanel}">
                             <TextBlock Text="🎵"
                                        FontSize="64"
                                        HorizontalAlignment="Center"/>
@@ -287,7 +287,17 @@
                                                  IsVisible="{Binding IsVideoSurfaceAVisible}"/>
                         <views:EmbeddedVideoView x:Name="VideoViewB"
                                                  IsVisible="{Binding IsVideoSurfaceBVisible}"/>
-                    </Panel>
+                        <!-- Audio with visualization: title under the native surface -->
+                        <Border Grid.Row="1" Background="Black" Padding="12,8"
+                                IsVisible="{Binding ShowAudioTitleStrip}">
+                            <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="{Binding CurrentSong.DisplayTitle, FallbackValue=''}"
+                                           Foreground="White" FontSize="22" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding CurrentSong.DisplayArtist, FallbackValue=''}"
+                                           Foreground="#CCFFFFFF" FontSize="16" VerticalAlignment="Bottom"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
 
                     <!-- Collapsible Control Handle at Bottom -->
                     <Grid Grid.Row="1" IsVisible="{Binding IsVideoMode}">

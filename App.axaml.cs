@@ -504,6 +504,8 @@ public partial class App : Application
                 _mainWindowViewModel.AutoPlayEnabled = settings.AutoPlayEnabled;
                 _mainWindowViewModel.ShuffleModeEnabled = settings.ShuffleMode;
                 _mainWindowViewModel.CrossfadeEnabled = settings.CrossfadeEnabled;
+                _mainWindowViewModel.AudioVisualizationEnabled =
+                    !string.Equals(settings.VisualizationStyle, "none", StringComparison.OrdinalIgnoreCase);
                 _mainWindowViewModel.IsDualScreenMode = settings.DisplayMode == DisplayMode.Dual;
             }
 
@@ -511,6 +513,7 @@ public partial class App : Application
             {
                 _mediaPlayerController.EnableCrossfade(settings.CrossfadeEnabled, Math.Clamp(settings.CrossfadeDuration, 1, 20));
                 _mediaPlayerController.AudioNormalizationEnabled = settings.AudioBoostEnabled;
+                _mediaPlayerController.AudioVisualization = settings.VisualizationStyle ?? "bars";
             }
         });
 
