@@ -35,7 +35,6 @@ public partial class App : Application
     private IErrorHandlingService? _errorHandlingService;
     private ILoggingService? _loggingService;
     private IWindowManager? _windowManager;
-    private IAudioVisualizationEngine? _audioVisualizationEngine;
     private ICacheManager? _cacheManager;
     private MainWindowViewModel? _mainWindowViewModel;
 
@@ -167,9 +166,6 @@ public partial class App : Application
             
             // Initialize window manager
             _windowManager = new WindowManager(_settingsManager);
-            
-            // Initialize audio visualization engine
-            _audioVisualizationEngine = new AudioVisualizationEngine();
 
             // Settings take effect immediately when they change (Settings dialog, folder picker...)
             _settingsManager.SettingsChanged += (_, _) =>

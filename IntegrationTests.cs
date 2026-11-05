@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -30,7 +30,6 @@ public class IntegrationTests
     private IErrorHandlingService? _errorHandlingService;
     private ILoggingService? _loggingService;
     private IWindowManager? _windowManager;
-    private IAudioVisualizationEngine? _audioVisualizationEngine;
     private ICacheManager? _cacheManager;
     private MainWindowViewModel? _mainWindowViewModel;
     private string _testDbPath = "";
@@ -84,7 +83,6 @@ public class IntegrationTests
         if (_keyboardShortcutManager == null) throw new Exception("KeyboardShortcutManager not initialized");
         if (_cacheManager == null) throw new Exception("CacheManager not initialized");
         if (_windowManager == null) throw new Exception("WindowManager not initialized");
-        if (_audioVisualizationEngine == null) throw new Exception("AudioVisualizationEngine not initialized");
         
         Console.WriteLine("✓ All services initialized successfully\n");
     }
@@ -397,7 +395,6 @@ public class IntegrationTests
             _cacheManager = new CacheManager(cacheDirectory);
             
             _windowManager = new WindowManager(_settingsManager);
-            _audioVisualizationEngine = new AudioVisualizationEngine();
 
             _errorHandlingService.ClearAllErrors();
             

@@ -92,12 +92,6 @@ public interface IMediaPlayerController
     void ToggleSubtitles(bool enabled);
 
     /// <summary>
-    /// Gets the current audio spectrum data for visualizations
-    /// </summary>
-    /// <returns>Array of frequency amplitudes</returns>
-    float[] GetAudioSpectrum();
-
-    /// <summary>
     /// Preloads the next media file for crossfade transitions
     /// </summary>
     /// <param name="mediaFile">The media file to preload</param>

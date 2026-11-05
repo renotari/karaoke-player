@@ -49,11 +49,6 @@ public static class TestRunner
 
             Console.WriteLine();
 
-            // Run AudioVisualizationEngine tests
-            AudioVisualizationEngineTest.RunTests();
-
-            Console.WriteLine();
-
             // Run LoggingService tests
             LoggingServiceTest.RunTests();
 

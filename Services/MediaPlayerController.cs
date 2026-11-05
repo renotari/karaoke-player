@@ -52,7 +52,6 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     private MediaFile? _pendingPreload; // requested while a crossfade was using the other player
     private float _volume = 0.5f;
     private bool _subtitlesEnabled = true;
-    private readonly float[] _audioSpectrum = new float[256];
     private string? _audioDeviceId; // null = system default
     private (IntPtr First, IntPtr Second) _videoWindows;
 
@@ -398,13 +397,6 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
                 player.SetSpu(-1);
             }
         }
-    }
-
-    public float[] GetAudioSpectrum()
-    {
-        // LibVLC does not expose the audio spectrum without replacing the audio output;
-        // the visualization engine animates without real spectrum data.
-        return _audioSpectrum;
     }
 
     private Media CreateMedia(MediaFile mediaFile)
