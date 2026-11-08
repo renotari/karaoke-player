@@ -184,23 +184,21 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
 
     private List<string> FindMediaFiles(string directoryPath)
     {
-        var mediaFiles = new List<string>();
+        // Folders we cannot read (System Volume Information, the "My Music" junction in
+        // Documents...) are skipped one by one: with SearchOption.AllDirectories a single
+        // one of them made the whole scan fail. Hidden/system items (the recycle bin) are
+        // skipped too. Any other error reaches the caller: treating it as an empty folder
+        // would remove the whole library from the database.
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System
+        };
 
-        try
-        {
-            var files = Directory.GetFiles(directoryPath, "*.*", SearchOption.AllDirectories);
-            mediaFiles.AddRange(files.Where(f => IsSupportedMediaFile(f)));
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Skip directories we don't have access to
-        }
-        catch (DirectoryNotFoundException)
-        {
-            // Skip directories that don't exist
-        }
-
-        return mediaFiles;
+        return Directory.EnumerateFiles(directoryPath, "*", options)
+            .Where(IsSupportedMediaFile)
+            .ToList();
     }
 
     private bool IsSupportedMediaFile(string filePath)

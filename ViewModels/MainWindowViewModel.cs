@@ -95,7 +95,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public MainWindowViewModel(
         ISearchEngine searchEngine,
         IPlaylistManager playlistManager,
-        IMediaPlayerController mediaPlayerController,
+        IMediaPlayerController? mediaPlayerController,
         IMediaLibraryManager mediaLibraryManager,
         INotificationService notificationService,
         IMetadataExtractor? metadataExtractor = null,
@@ -105,7 +105,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _thumbnailGenerator = thumbnailGenerator;
         _searchEngine = searchEngine ?? throw new ArgumentNullException(nameof(searchEngine));
         _playlistManager = playlistManager ?? throw new ArgumentNullException(nameof(playlistManager));
-        _mediaPlayerController = mediaPlayerController ?? throw new ArgumentNullException(nameof(mediaPlayerController));
+        _mediaPlayerController = mediaPlayerController; // null when LibVLC could not start
         _mediaLibraryManager = mediaLibraryManager ?? throw new ArgumentNullException(nameof(mediaLibraryManager));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
 

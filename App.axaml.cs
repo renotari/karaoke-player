@@ -99,6 +99,8 @@ public partial class App : Application
             // Check for first run and show welcome dialog after window is ready
             mainWindow.Opened += async (s, e) =>
             {
+                ShowStartupErrors();
+
                 var isFirstRun = await CheckFirstRunAsync();
                 
                 if (isFirstRun)
@@ -116,26 +118,60 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
+    // What failed while starting up: shown to the user once the main window is open
+    private readonly System.Collections.Generic.List<string> _startupErrors = new();
+
+    /// <summary>
+    /// Creates the services. Each step is independent: without LibVLC the songs do not
+    /// play, but the library and the settings must keep working, and the user must be
+    /// told what went wrong (a WinExe has no console).
+    /// </summary>
     private void InitializeServices()
     {
-        try
+        void Step(string what, Action action)
         {
-            // Initialize logging service first so other services can use it
+            try { action(); }
+            catch (Exception ex)
+            {
+                _startupErrors.Add($"{what}: {ex.Message}");
+                _loggingService?.LogCritical($"Could not initialize {what}", ex);
+            }
+        }
+
+        Step("logging", () =>
+        {
             _loggingService = new LoggingService();
             _loggingService.LogInformation("Application starting");
+        });
 
-            // Initialize LibVLC
-            Core.Initialize();
+        Step("notifications", () =>
+        {
+            _notificationService = new NotificationService();
+            _errorHandlingService = new ErrorHandlingService(_notificationService, _loggingService!);
 
-            // Set up database with performance optimizations
+            // Clear all error states on application startup (Requirement 18.13)
+            _errorHandlingService.ClearAllErrors();
+        });
+
+        Step("settings", () =>
+        {
+            _settingsManager = new SettingsManager();
+
+            // Settings take effect immediately when they change (Settings dialog, folder picker...)
+            _settingsManager.SettingsChanged += (_, _) =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplySettings(_settingsManager.GetSettings()));
+        });
+
+        Step("keyboard shortcuts", () => _keyboardShortcutManager = new KeyboardShortcutManager());
+
+        Step("media library", () =>
+        {
             var userDataPath = AppPaths.Root;
 
-            var dbPath = Path.Combine(userDataPath, "karaoke.db");
-            
             // Configure SQLite with performance optimizations
             var connectionString = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
             {
-                DataSource = dbPath,
+                DataSource = Path.Combine(userDataPath, "karaoke.db"),
                 Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate,
                 Cache = Microsoft.Data.Sqlite.SqliteCacheMode.Shared, // Enable shared cache for connection pooling
                 Pooling = true // Enable connection pooling
@@ -144,46 +180,43 @@ public partial class App : Application
             // Create DbContext factory (handles database initialization and optimizations)
             _dbContextFactory = new DbContextFactory(connectionString);
 
-            // Create service instances with logging
-            _notificationService = new NotificationService();
-            _errorHandlingService = new ErrorHandlingService(_notificationService, _loggingService);
-            _settingsManager = new SettingsManager();
             _searchEngine = new SearchEngine(_dbContextFactory);
             _playlistManager = new PlaylistManager(_dbContextFactory);
-            _mediaPlayerController = new MediaPlayerController(_loggingService);
             _mediaLibraryManager = new MediaLibraryManager(_dbContextFactory);
             _metadataExtractor = new MetadataExtractor(_dbContextFactory);
 
-            // Create LibVLC instance for thumbnail generator
-            var libVLC = new LibVLC();
-            _thumbnailGenerator = new ThumbnailGenerator(_dbContextFactory, libVLC);
-            _keyboardShortcutManager = new KeyboardShortcutManager();
-            
             // Initialize cache manager with cache directory
-            var cacheDirectory = Path.Combine(userDataPath, "cache");
-            _cacheManager = new CacheManager(cacheDirectory);
-
-            // Settings take effect immediately when they change (Settings dialog, folder picker...)
-            _settingsManager.SettingsChanged += (_, _) =>
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplySettings(_settingsManager.GetSettings()));
+            _cacheManager = new CacheManager(Path.Combine(userDataPath, "cache"));
 
             // Files that appear (or change) while the app is running also need
             // metadata and a thumbnail
             _mediaLibraryManager.FilesAdded += OnLibraryFilesChanged;
             _mediaLibraryManager.FilesModified += OnLibraryFilesChanged;
+        });
 
-            // Clear all error states on application startup (Requirement 18.13)
-            _errorHandlingService.ClearAllErrors();
-            
-            _loggingService.LogInformation("All services initialized successfully");
-        }
-        catch (Exception ex)
+        Step("video player (LibVLC)", () =>
         {
-            // Log error - for now just continue with null services
-            // The ViewModel will handle null services gracefully
-            _loggingService?.LogCritical("Error initializing services", ex);
-            Console.WriteLine($"Error initializing services: {ex.Message}");
-        }
+            Core.Initialize();
+            _mediaPlayerController = new MediaPlayerController(_loggingService);
+
+            // Create LibVLC instance for thumbnail generator
+            if (_dbContextFactory != null)
+                _thumbnailGenerator = new ThumbnailGenerator(_dbContextFactory, new LibVLC());
+        });
+
+        if (_startupErrors.Count == 0)
+            _loggingService?.LogInformation("All services initialized successfully");
+    }
+
+    private void ShowStartupErrors()
+    {
+        if (_startupErrors.Count == 0)
+            return;
+
+        var details = string.Join("\n", _startupErrors);
+        if (_mainWindowViewModel != null)
+            _mainWindowViewModel.StatusMessage = $"Startup problem - {details}";
+        _notificationService?.ShowError("Startup problem", details, 30000);
     }
 
     // ----- Fullscreen and dual screen -----------------------------------------
@@ -438,9 +471,9 @@ public partial class App : Application
     private MainWindowViewModel CreateMainWindowViewModel()
     {
         // If services are available, use the full constructor
-        if (_searchEngine != null && _playlistManager != null && 
-            _mediaPlayerController != null && _mediaLibraryManager != null &&
-            _notificationService != null)
+        // (the player may be missing: the library and the settings still work)
+        if (_searchEngine != null && _playlistManager != null &&
+            _mediaLibraryManager != null && _notificationService != null)
         {
             return new MainWindowViewModel(
                 _searchEngine,
@@ -509,7 +542,7 @@ public partial class App : Application
                 // User cancelled - create default settings file so app can still run
                 // but they can change the directory later in settings
                 _loggingService?.LogInformation("Welcome dialog cancelled - creating default settings");
-                await _settingsManager.LoadSettingsAsync(); // This will create default settings
+                await LoadSettingsAndScanAsync(); // Creates the defaults and applies them (shortcuts...)
             }
         }
         catch (Exception ex)
@@ -542,6 +575,10 @@ public partial class App : Application
 
     // Media directory currently scanned and monitored
     private string? _activeMediaDirectory;
+
+    /// <summary>The next time the settings are applied the media folder is scanned again,
+    /// even if it is the same one (the user picked it again to reload it).</summary>
+    public void ForgetActiveMediaDirectory() => _activeMediaDirectory = null;
 
     /// <summary>
     /// Applies the settings to the running application. Called at startup and every
@@ -667,14 +704,30 @@ public partial class App : Application
             _metadataExtractor?.StartProcessing();
             _thumbnailGenerator?.StartProcessing();
 
-            _loggingService?.LogInformation("Media directory scan complete");
+            _loggingService?.LogInformation($"Media directory scan complete: {files.Count} files");
+
+            // An unchanged library raises no events: the outcome must be stated anyway
+            SetStatus(files.Count > 0 ? $"Library ready - {files.Count} songs" : $"No media files in {directory}");
+            if (files.Count == 0)
+            {
+                _notificationService?.ShowWarning("No media files found",
+                    $"No MP4, MKV, WEBM or MP3 files in '{directory}'.");
+            }
         }
         catch (Exception ex)
         {
+            _activeMediaDirectory = null; // picking the folder again retries
             _loggingService?.LogError("Error scanning media directory", ex);
+            SetStatus($"Library scan failed: {ex.Message}");
             _notificationService?.ShowError("Library scan failed", ex.Message);
         }
     }
+
+    private void SetStatus(string message) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+    {
+        if (_mainWindowViewModel != null)
+            _mainWindowViewModel.StatusMessage = message;
+    });
 
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
     {

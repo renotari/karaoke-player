@@ -115,8 +115,7 @@ public partial class MainWindow : Window
             var app = App.Current;
             if (app?.SettingsManager == null)
             {
-                if (DataContext is MainWindowViewModel vm)
-                    vm.StatusMessage = "Error: Settings not available";
+                ReportError("Settings not available", "See the log file for the startup error.");
                 return;
             }
 
@@ -132,11 +131,18 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            App.Current?.LoggingService?.LogError("Error opening settings", ex);
-            if (DataContext is MainWindowViewModel viewModel)
-            {
-                viewModel.StatusMessage = $"Error opening settings: {ex.Message}";
-            }
+            ReportError("Error opening settings", ex.Message, ex);
+        }
+    }
+
+    /// <summary>Logs a problem and shows it to the user (a WinExe has no console).</summary>
+    private void ReportError(string title, string message, Exception? ex = null)
+    {
+        App.Current?.LoggingService?.LogError($"{title}: {message}", ex);
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.StatusMessage = $"{title}: {message}";
+            vm.NotificationService?.ShowError(title, message);
         }
     }
 
@@ -308,8 +314,13 @@ public partial class MainWindow : Window
                     // Saving the setting is enough: the app re-scans the new folder
                     // and the library updates through its events
                     var app = App.Current;
-                    if (app?.SettingsManager != null)
+                    if (app?.SettingsManager == null)
                     {
+                        ReportError("Cannot open the folder", "Settings not available: see the log file for the startup error.");
+                    }
+                    else
+                    {
+                        app.ForgetActiveMediaDirectory();
                         app.SettingsManager.SetSetting(nameof(Models.AppSettings.MediaDirectory), result);
                         await app.SettingsManager.SaveSettingsAsync();
 
@@ -323,11 +334,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error opening media directory: {ex.Message}");
-            if (DataContext is MainWindowViewModel vm)
-            {
-                vm.StatusMessage = $"Error opening media directory: {ex.Message}";
-            }
+            ReportError("Error opening media directory", ex.Message, ex);
         }
     }
 

@@ -93,6 +93,34 @@ public static class MediaLibraryManagerTest
             }
             Console.WriteLine();
 
+            // Test 3b: a folder that cannot be read must not hide the other files
+            if (!OperatingSystem.IsWindows())
+            {
+                Console.WriteLine("Test 3b: Scanning with an unreadable subfolder...");
+                var blockedRoot = Path.Combine(testDir, "..", "KaraokePlayerTestBlocked_" + Guid.NewGuid());
+                var blocked = Path.Combine(blockedRoot, "blocked");
+                Directory.CreateDirectory(blocked);
+                File.WriteAllText(Path.Combine(blockedRoot, "reachable.mp3"), "test content");
+                File.SetUnixFileMode(blocked, UnixFileMode.None);
+                try
+                {
+                    using var blockedManager = new MediaLibraryManager(new TestDbContextFactory());
+                    await blockedManager.ScanDirectoryAsync(blockedRoot);
+                    var found = await blockedManager.GetMediaFilesAsync();
+                    if (found.Count != 1)
+                    {
+                        Console.WriteLine($"✗ Expected 1 file next to the unreadable folder, found {found.Count}");
+                        throw new InvalidOperationException("Unreadable subfolder hid the other files");
+                    }
+                    Console.WriteLine("✓ Unreadable subfolder skipped, other files found\n");
+                }
+                finally
+                {
+                    File.SetUnixFileMode(blocked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                    Directory.Delete(blockedRoot, recursive: true);
+                }
+            }
+
             // Test 4: Start monitoring
             Console.WriteLine("Test 4: Starting file system monitoring...");
             manager.StartMonitoring();

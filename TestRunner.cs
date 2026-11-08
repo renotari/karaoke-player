@@ -24,6 +24,11 @@ public static class TestRunner
 
             Console.WriteLine();
 
+            // Run MediaLibraryManager tests
+            await MediaLibraryManagerTest.RunTests();
+
+            Console.WriteLine();
+
             // Run SettingsManager tests
             await SettingsManagerTest.RunTests();
 
