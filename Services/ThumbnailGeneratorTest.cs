@@ -34,7 +34,7 @@ public static class ThumbnailGeneratorTest
         }
         else
         {
-            Console.WriteLine("✗ Cache directory not created\n");
+            TestFailures.Fail("✗ Cache directory not created\n");
         }
 
         // Test 2: Default placeholder creation - Video
@@ -49,7 +49,7 @@ public static class ThumbnailGeneratorTest
         }
         else
         {
-            Console.WriteLine("✗ Video placeholder not created\n");
+            TestFailures.Fail("✗ Video placeholder not created\n");
         }
 
         // Test 3: Default placeholder creation - Audio
@@ -64,7 +64,7 @@ public static class ThumbnailGeneratorTest
         }
         else
         {
-            Console.WriteLine("✗ Audio placeholder not created\n");
+            TestFailures.Fail("✗ Audio placeholder not created\n");
         }
 
         // Test 4: Placeholder caching (should reuse existing)
@@ -76,7 +76,7 @@ public static class ThumbnailGeneratorTest
         }
         else
         {
-            Console.WriteLine("✗ Placeholder not reused\n");
+            TestFailures.Fail("✗ Placeholder not reused\n");
         }
 
         // Test 5: Queue processing

@@ -333,7 +333,7 @@ public class SearchEngineTest
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"\n✗ Test failed: {ex.Message}");
+            TestFailures.Fail($"\n✗ Test failed: {ex.Message}");
             throw;
         }
     }

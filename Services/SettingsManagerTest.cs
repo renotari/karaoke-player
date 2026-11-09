@@ -44,7 +44,7 @@ public static class SettingsManagerTest
         try
         {
             settingsManager.SetSetting(nameof(AppSettings.CrossfadeDuration), 25); // Invalid: > 20
-            Console.WriteLine("✗ Validation failed - should have thrown exception");
+            TestFailures.Fail("✗ Validation failed - should have thrown exception");
         }
         catch (ArgumentException ex)
         {
@@ -56,7 +56,7 @@ public static class SettingsManagerTest
         try
         {
             settingsManager.SetSetting(nameof(AppSettings.Volume), 1.5); // Invalid: > 1.0
-            Console.WriteLine("✗ Validation failed - should have thrown exception");
+            TestFailures.Fail("✗ Validation failed - should have thrown exception");
         }
         catch (ArgumentException ex)
         {

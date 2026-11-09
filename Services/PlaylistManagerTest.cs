@@ -300,13 +300,13 @@ public class PlaylistManagerTest
                 }
                 else
                 {
-                    Console.WriteLine($"✗ {name} - Test returned false");
+                    TestFailures.Fail($"✗ {name} - Test returned false");
                     failed++;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"✗ {name} - {ex.Message}");
+                TestFailures.Fail($"✗ {name} - {ex.Message}");
                 failed++;
             }
         }

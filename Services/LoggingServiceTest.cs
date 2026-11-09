@@ -50,12 +50,12 @@ public class LoggingServiceTest
             }
             else
             {
-                Console.WriteLine("✗ Basic logging failed - missing expected log entries");
+                TestFailures.Fail("✗ Basic logging failed - missing expected log entries");
             }
         }
         else
         {
-            Console.WriteLine("✗ Log file was not created");
+            TestFailures.Fail("✗ Log file was not created");
         }
     }
 
@@ -86,7 +86,7 @@ public class LoggingServiceTest
         }
         else
         {
-            Console.WriteLine("✗ Some log levels are missing");
+            TestFailures.Fail("✗ Some log levels are missing");
         }
     }
 
@@ -108,7 +108,7 @@ public class LoggingServiceTest
         }
         else
         {
-            Console.WriteLine("✗ File load failure logging failed");
+            TestFailures.Fail("✗ File load failure logging failed");
         }
     }
 
@@ -130,7 +130,7 @@ public class LoggingServiceTest
         }
         else
         {
-            Console.WriteLine("✗ Playback event logging failed");
+            TestFailures.Fail("✗ Playback event logging failed");
         }
     }
 
@@ -163,7 +163,7 @@ public class LoggingServiceTest
         }
         else
         {
-            Console.WriteLine("✗ Crossfade transition logging failed");
+            TestFailures.Fail("✗ Crossfade transition logging failed");
         }
     }
 
@@ -193,7 +193,7 @@ public class LoggingServiceTest
         }
         else
         {
-            Console.WriteLine("✗ Log rotation did not occur as expected");
+            TestFailures.Fail("✗ Log rotation did not occur as expected");
         }
     }
 
@@ -217,7 +217,7 @@ public class LoggingServiceTest
         }
         else
         {
-            Console.WriteLine("✗ Log statistics failed");
+            TestFailures.Fail("✗ Log statistics failed");
         }
     }
 }

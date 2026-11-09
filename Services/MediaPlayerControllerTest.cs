@@ -42,7 +42,7 @@ public class MediaPlayerControllerTest
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"✗ Initialization test failed: {ex.Message}\n");
+            TestFailures.Fail($"✗ Initialization test failed: {ex.Message}\n");
         }
     }
 
@@ -67,7 +67,7 @@ public class MediaPlayerControllerTest
             try
             {
                 controller.SetVolume(1.5f);
-                Console.WriteLine("✗ Should have thrown exception for invalid volume");
+                TestFailures.Fail("✗ Should have thrown exception for invalid volume");
             }
             catch (ArgumentOutOfRangeException)
             {
@@ -78,7 +78,7 @@ public class MediaPlayerControllerTest
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"✗ Volume control test failed: {ex.Message}\n");
+            TestFailures.Fail($"✗ Volume control test failed: {ex.Message}\n");
         }
     }
 
@@ -102,7 +102,7 @@ public class MediaPlayerControllerTest
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"✗ Audio devices test failed: {ex.Message}\n");
+            TestFailures.Fail($"✗ Audio devices test failed: {ex.Message}\n");
         }
     }
 
@@ -124,7 +124,7 @@ public class MediaPlayerControllerTest
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"✗ Subtitle toggle test failed: {ex.Message}\n");
+            TestFailures.Fail($"✗ Subtitle toggle test failed: {ex.Message}\n");
         }
     }
 
@@ -157,7 +157,7 @@ public class MediaPlayerControllerTest
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"✗ State management test failed: {ex.Message}\n");
+            TestFailures.Fail($"✗ State management test failed: {ex.Message}\n");
         }
     }
 
@@ -193,7 +193,7 @@ public class MediaPlayerControllerTest
             try
             {
                 await controller.PreloadNextAsync(null!);
-                Console.WriteLine("✗ Should have thrown exception for null media");
+                TestFailures.Fail("✗ Should have thrown exception for null media");
             }
             catch (ArgumentNullException)
             {
@@ -204,7 +204,7 @@ public class MediaPlayerControllerTest
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"✗ Preloading test failed: {ex.Message}\n");
+            TestFailures.Fail($"✗ Preloading test failed: {ex.Message}\n");
         }
     }
 
@@ -241,7 +241,7 @@ public class MediaPlayerControllerTest
             try
             {
                 controller.EnableCrossfade(true, 0);
-                Console.WriteLine("✗ Should have thrown exception for duration < 1");
+                TestFailures.Fail("✗ Should have thrown exception for duration < 1");
             }
             catch (ArgumentOutOfRangeException)
             {
@@ -252,7 +252,7 @@ public class MediaPlayerControllerTest
             try
             {
                 controller.EnableCrossfade(true, 21);
-                Console.WriteLine("✗ Should have thrown exception for duration > 20");
+                TestFailures.Fail("✗ Should have thrown exception for duration > 20");
             }
             catch (ArgumentOutOfRangeException)
             {
@@ -263,7 +263,7 @@ public class MediaPlayerControllerTest
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"✗ Crossfade test failed: {ex.Message}\n");
+            TestFailures.Fail($"✗ Crossfade test failed: {ex.Message}\n");
         }
     }
 

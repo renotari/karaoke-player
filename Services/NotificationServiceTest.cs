@@ -44,7 +44,7 @@ public class NotificationServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL\n");
+            TestFailures.Fail("  ✗ FAIL\n");
         }
     }
 
@@ -65,7 +65,7 @@ public class NotificationServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL\n");
+            TestFailures.Fail("  ✗ FAIL\n");
         }
     }
 
@@ -86,7 +86,7 @@ public class NotificationServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL\n");
+            TestFailures.Fail("  ✗ FAIL\n");
         }
     }
 
@@ -107,7 +107,7 @@ public class NotificationServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL\n");
+            TestFailures.Fail("  ✗ FAIL\n");
         }
     }
 
@@ -140,12 +140,12 @@ public class NotificationServiceTest
             }
             else
             {
-                Console.WriteLine("  ✗ FAIL: Notification not removed\n");
+                TestFailures.Fail("  ✗ FAIL: Notification not removed\n");
             }
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: Notification not dismissed\n");
+            TestFailures.Fail("  ✗ FAIL: Notification not dismissed\n");
         }
     }
 
@@ -174,12 +174,12 @@ public class NotificationServiceTest
             }
             else
             {
-                Console.WriteLine("  ✗ FAIL: Notifications not cleared\n");
+                TestFailures.Fail("  ✗ FAIL: Notifications not cleared\n");
             }
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: Notifications not created\n");
+            TestFailures.Fail("  ✗ FAIL: Notifications not created\n");
         }
     }
 
@@ -206,12 +206,12 @@ public class NotificationServiceTest
             }
             else
             {
-                Console.WriteLine("  ✗ FAIL: Notification not auto-dismissed\n");
+                TestFailures.Fail("  ✗ FAIL: Notification not auto-dismissed\n");
             }
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: Notification not created\n");
+            TestFailures.Fail("  ✗ FAIL: Notification not created\n");
         }
     }
 }

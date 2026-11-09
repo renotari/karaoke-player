@@ -46,6 +46,13 @@ sealed class Program
         {
             try { System.IO.Directory.Delete(tempDir, recursive: true); } catch { /* best effort */ }
         }
+
+        // Suites that only print a failed check still fail the run
+        if (Services.TestFailures.Count > 0)
+        {
+            Console.WriteLine($"✗✗✗ {Services.TestFailures.Count} failed check(s) - see the ✗ lines above");
+            Environment.Exit(1);
+        }
     }
 
     private static async Task RunTests()

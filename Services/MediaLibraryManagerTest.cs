@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -76,7 +76,7 @@ public static class MediaLibraryManagerTest
             // Verify we found all files
             if (mediaFiles.Count != 6)
             {
-                Console.WriteLine($"✗ Expected 6 files, found {mediaFiles.Count}");
+                TestFailures.Fail($"✗ Expected 6 files, found {mediaFiles.Count}");
                 return;
             }
 
@@ -88,7 +88,7 @@ public static class MediaLibraryManagerTest
             Console.WriteLine($"✓ Video files: {videoFiles.Count}");
             if (audioFiles.Count != 2 || videoFiles.Count != 4)
             {
-                Console.WriteLine("✗ File type detection failed");
+                TestFailures.Fail("✗ File type detection failed");
                 return;
             }
             Console.WriteLine();
@@ -109,7 +109,7 @@ public static class MediaLibraryManagerTest
                     var found = await blockedManager.GetMediaFilesAsync();
                     if (found.Count != 1)
                     {
-                        Console.WriteLine($"✗ Expected 1 file next to the unreadable folder, found {found.Count}");
+                        TestFailures.Fail($"✗ Expected 1 file next to the unreadable folder, found {found.Count}");
                         throw new InvalidOperationException("Unreadable subfolder hid the other files");
                     }
                     Console.WriteLine("✓ Unreadable subfolder skipped, other files found\n");
@@ -118,6 +118,41 @@ public static class MediaLibraryManagerTest
                 {
                     File.SetUnixFileMode(blocked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
                     Directory.Delete(blockedRoot, recursive: true);
+                }
+            }
+
+            // Test 3c: songs in a folder that becomes unreadable are kept (same id),
+            // songs really deleted are removed
+            if (!OperatingSystem.IsWindows())
+            {
+                Console.WriteLine("Test 3c: Rescan with a folder that became unreadable...");
+                var root = Path.Combine(Path.GetTempPath(), "KaraokePlayerTestSkipped_" + Guid.NewGuid());
+                var sub = Path.Combine(root, "sub");
+                Directory.CreateDirectory(sub);
+                File.WriteAllText(Path.Combine(sub, "kept.mp3"), "x");
+                var deleted = Path.Combine(root, "deleted.mp3");
+                File.WriteAllText(deleted, "x");
+                try
+                {
+                    using var rescanManager = new MediaLibraryManager(new TestDbContextFactory());
+                    await rescanManager.ScanDirectoryAsync(root);
+                    var before = await rescanManager.GetMediaFilesAsync();
+                    var keptId = before.Single(f => f.Filename == "kept.mp3").Id;
+
+                    File.Delete(deleted);
+                    File.SetUnixFileMode(sub, UnixFileMode.None);
+                    await rescanManager.ScanDirectoryAsync(root);
+                    var after = await rescanManager.GetMediaFilesAsync();
+
+                    if (after.Count != 1 || after[0].Id != keptId || rescanManager.SkippedFolders.Count != 1)
+                        TestFailures.Fail($"✗ Expected only kept.mp3 with the same id and 1 skipped folder, found {after.Count} files, {rescanManager.SkippedFolders.Count} skipped");
+                    else
+                        Console.WriteLine("✓ Song in the unreadable folder kept, deleted song removed\n");
+                }
+                finally
+                {
+                    File.SetUnixFileMode(sub, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                    Directory.Delete(root, recursive: true);
                 }
             }
 
@@ -141,7 +176,7 @@ public static class MediaLibraryManagerTest
 
             var newFile = Path.Combine(testDir, "newsong.mp3");
             File.WriteAllText(newFile, "new content");
-            await Task.Delay(1000); // Wait for file system watcher
+            await Task.Delay(4000); // Wait for file system watcher (changes are reconciled after 1.5 s)
 
             if (fileAddedEventFired)
             {
@@ -149,7 +184,7 @@ public static class MediaLibraryManagerTest
             }
             else
             {
-                Console.WriteLine("⚠ File added event did not fire (may need more time)");
+                TestFailures.Fail("✗ File added event did not fire");
             }
 
             // Test 6: File deleted event
@@ -162,7 +197,7 @@ public static class MediaLibraryManagerTest
             };
 
             File.Delete(newFile);
-            await Task.Delay(1000); // Wait for file system watcher
+            await Task.Delay(4000); // Wait for file system watcher
 
             if (fileDeletedEventFired)
             {
@@ -170,7 +205,7 @@ public static class MediaLibraryManagerTest
             }
             else
             {
-                Console.WriteLine("⚠ File deleted event did not fire (may need more time)");
+                TestFailures.Fail("✗ File deleted event did not fire");
             }
 
             // Test 7: Stop monitoring

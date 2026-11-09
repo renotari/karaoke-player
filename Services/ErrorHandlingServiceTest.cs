@@ -62,7 +62,7 @@ public class ErrorHandlingServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: Error not properly handled\n");
+            TestFailures.Fail("  ✗ FAIL: Error not properly handled\n");
         }
     }
 
@@ -93,7 +93,7 @@ public class ErrorHandlingServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: Error not stored correctly\n");
+            TestFailures.Fail("  ✗ FAIL: Error not stored correctly\n");
         }
     }
 
@@ -124,7 +124,7 @@ public class ErrorHandlingServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: No notification created\n");
+            TestFailures.Fail("  ✗ FAIL: No notification created\n");
         }
     }
 
@@ -155,7 +155,7 @@ public class ErrorHandlingServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: Playback error not recorded\n");
+            TestFailures.Fail("  ✗ FAIL: Playback error not recorded\n");
         }
     }
 
@@ -191,7 +191,7 @@ public class ErrorHandlingServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: Crossfade error not handled\n");
+            TestFailures.Fail("  ✗ FAIL: Crossfade error not handled\n");
         }
     }
 
@@ -223,7 +223,7 @@ public class ErrorHandlingServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: Metadata error handling incorrect\n");
+            TestFailures.Fail("  ✗ FAIL: Metadata error handling incorrect\n");
         }
     }
 
@@ -254,7 +254,7 @@ public class ErrorHandlingServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: Thumbnail error handling incorrect\n");
+            TestFailures.Fail("  ✗ FAIL: Thumbnail error handling incorrect\n");
         }
     }
 
@@ -288,7 +288,7 @@ public class ErrorHandlingServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: Errors not fully cleared\n");
+            TestFailures.Fail("  ✗ FAIL: Errors not fully cleared\n");
         }
     }
 
@@ -323,7 +323,7 @@ public class ErrorHandlingServiceTest
         }
         else
         {
-            Console.WriteLine("  ✗ FAIL: GetError not working correctly\n");
+            TestFailures.Fail("  ✗ FAIL: GetError not working correctly\n");
         }
     }
 }

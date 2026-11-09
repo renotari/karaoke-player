@@ -32,7 +32,7 @@ public static class MetadataExtractorTest
         }
         else
         {
-            Console.WriteLine("✗ Pattern 1 failed\n");
+            TestFailures.Fail("✗ Pattern 1 failed\n");
         }
 
         // Test 2: Filename parsing - Pattern "Artist-Title"
@@ -47,7 +47,7 @@ public static class MetadataExtractorTest
         }
         else
         {
-            Console.WriteLine("✗ Pattern 2 failed\n");
+            TestFailures.Fail("✗ Pattern 2 failed\n");
         }
 
         // Test 3: Filename parsing - Pattern "Title (Artist)"
@@ -62,7 +62,7 @@ public static class MetadataExtractorTest
         }
         else
         {
-            Console.WriteLine("✗ Pattern 3 failed\n");
+            TestFailures.Fail("✗ Pattern 3 failed\n");
         }
 
         // Test 4: Filename parsing - Pattern "Artist_Title"
@@ -77,7 +77,7 @@ public static class MetadataExtractorTest
         }
         else
         {
-            Console.WriteLine("✗ Pattern 4 failed\n");
+            TestFailures.Fail("✗ Pattern 4 failed\n");
         }
 
         // Test 5: Filename parsing - No pattern match (fallback)
@@ -92,7 +92,7 @@ public static class MetadataExtractorTest
         }
         else
         {
-            Console.WriteLine("✗ Fallback pattern failed\n");
+            TestFailures.Fail("✗ Fallback pattern failed\n");
         }
 
         // Test 6: Queue processing
