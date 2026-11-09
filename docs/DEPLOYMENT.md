@@ -11,7 +11,7 @@ This guide covers building, packaging, and deploying the Karaoke Player applicat
 - Visual Studio 2022 or JetBrains Rider (optional, for development)
 
 ### Deployment Tools
-- Inno Setup 6: https://jrsoftware.org/isinfo.php (for creating installers)
+- Inno Setup 7 (recommended) or 6: https://jrsoftware.org/isdl.php (for creating installers)
 
 ## Build Process
 
@@ -223,7 +223,7 @@ dotnet restore --force
 - Check the `<None Include>` section in `.csproj` for LibVLC files
 
 **Error: Inno Setup not found**
-- Install Inno Setup 6 from https://jrsoftware.org/isinfo.php
+- Install Inno Setup 7 from https://jrsoftware.org/isdl.php (Inno Setup 6 also works)
 - Verify installation path in `build-installer.bat`
 
 **Error: .NET 10 SDK not found**

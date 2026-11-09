@@ -6,26 +6,31 @@ echo Karaoke Player - Installer Build Script
 echo ========================================
 echo.
 
-REM Find Inno Setup 6 (normal install, 64-bit folder, or per-user install).
+REM Find Inno Setup 7 (recommended) or 6: normal install, 32-bit folder, or per-user install.
 REM No parenthesized blocks here: the ")" of "(x86)" would close them early.
 set "INNO_SETUP="
-if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set "INNO_SETUP=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
-if not defined INNO_SETUP if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" set "INNO_SETUP=%ProgramFiles%\Inno Setup 6\ISCC.exe"
-if not defined INNO_SETUP if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" set "INNO_SETUP=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+for %%V in (7 6) do call :find_inno %%V
 if defined INNO_SETUP goto inno_found
 
-echo ERROR: Inno Setup 6 not found!
+echo ERROR: Inno Setup not found!
 echo.
-echo Please install Inno Setup 6 from:
-echo https://jrsoftware.org/isinfo.php
+echo Please install Inno Setup 7 from:
+echo https://jrsoftware.org/isdl.php
 echo.
-echo Looked for ISCC.exe in:
-echo   %ProgramFiles(x86)%\Inno Setup 6
-echo   %ProgramFiles%\Inno Setup 6
-echo   %LOCALAPPDATA%\Programs\Inno Setup 6
+echo Looked for ISCC.exe in "Inno Setup 7" and "Inno Setup 6" under:
+echo   %ProgramFiles%
+echo   %ProgramFiles(x86)%
+echo   %LOCALAPPDATA%\Programs
 echo.
 pause
 exit /b 1
+
+:find_inno
+if defined INNO_SETUP exit /b 0
+if exist "%ProgramFiles%\Inno Setup %1\ISCC.exe" set "INNO_SETUP=%ProgramFiles%\Inno Setup %1\ISCC.exe"
+if not defined INNO_SETUP if exist "%ProgramFiles(x86)%\Inno Setup %1\ISCC.exe" set "INNO_SETUP=%ProgramFiles(x86)%\Inno Setup %1\ISCC.exe"
+if not defined INNO_SETUP if exist "%LOCALAPPDATA%\Programs\Inno Setup %1\ISCC.exe" set "INNO_SETUP=%LOCALAPPDATA%\Programs\Inno Setup %1\ISCC.exe"
+exit /b 0
 
 :inno_found
 echo Using Inno Setup: %INNO_SETUP%

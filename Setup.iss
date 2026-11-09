@@ -1,5 +1,5 @@
 ﻿; Karaoke Player Installer Script for Inno Setup
-; Requires Inno Setup 6.0 or later: https://jrsoftware.org/isinfo.php
+; Requires Inno Setup 6 or 7 (7 recommended): https://jrsoftware.org/isdl.php
 
 #define MyAppName "Karaoke Player"
 #define MyAppVersion "1.0.0"
