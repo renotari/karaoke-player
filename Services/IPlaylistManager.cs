@@ -64,6 +64,9 @@ public interface IPlaylistManager
     /// Saves the current playlist to an M3U/M3U8 file
     /// </summary>
     /// <param name="filePath">The path where to save the playlist file</param>
+    /// <summary>Writes the auto-saved session playlist now, if it changed.</summary>
+    Task FlushAsync();
+
     Task SavePlaylistAsync(string filePath);
 
     /// <summary>

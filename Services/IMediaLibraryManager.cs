@@ -66,6 +66,11 @@ public interface IMediaLibraryManager
     void StopMonitoring();
 
     /// <summary>
+    /// Folders the last scan could not read: their songs were kept in the library
+    /// </summary>
+    IReadOnlyList<string> SkippedFolders { get; }
+
+    /// <summary>
     /// Gets whether the file system watcher is currently active
     /// </summary>
     bool IsMonitoring { get; }

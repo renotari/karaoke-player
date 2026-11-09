@@ -287,11 +287,16 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         ClearValidationErrors();
     }
 
+    /// <summary>Why the last OK/Apply did not save (shown at the bottom of the dialog).</summary>
+    [ObservableProperty]
+    private string? _applyError;
+
     [RelayCommand]
     private async Task Ok()
     {
-        await Apply();
-        CloseWindow();
+        // On failure the dialog stays open with the edits and the error
+        if (await ApplyChangesAsync())
+            CloseWindow();
     }
 
     [RelayCommand]
@@ -307,38 +312,41 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
-    private async Task Apply()
+    private async Task Apply() => await ApplyChangesAsync();
+
+    private async Task<bool> ApplyChangesAsync()
     {
+        ApplyError = null;
+
+        // Validate all settings before applying
+        ValidateMediaDirectory();
+        ValidateCrossfadeDuration();
+        ValidateFontSize();
+        ValidatePreloadBufferSize();
+        ValidateCacheSize();
+
+        if (HasValidationErrors)
+        {
+            ApplyError = "Some values are not valid: check the fields marked in red (all tabs).";
+            return false;
+        }
+
         try
         {
-            // Validate all settings before applying
-            ValidateMediaDirectory();
-            ValidateCrossfadeDuration();
-            ValidateFontSize();
-            ValidatePreloadBufferSize();
-            ValidateCacheSize();
+            // The new settings are built on a copy: the active ones change only if the save succeeds
+            var newSettings = CloneSettings(_workingSettings);
+            SaveToSettings(newSettings);
+            await _settingsManager.UpdateSettingsAsync(newSettings);
 
-            if (HasValidationErrors)
-            {
-                Console.WriteLine("Cannot apply settings: validation errors exist");
-                return;
-            }
-
-            // Save current UI values to working settings
-            SaveToSettings(_workingSettings);
-
-            // Validate and save
-            await _settingsManager.UpdateSettingsAsync(_workingSettings);
-
-            // Update original settings to match
-            _originalSettings = CloneSettings(_workingSettings);
-            
-            Console.WriteLine("Settings applied successfully");
+            _workingSettings = newSettings;
+            _originalSettings = CloneSettings(newSettings);
+            return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error applying settings: {ex.Message}");
-            // TODO: Show error dialog to user
+            ApplyError = $"Settings not saved: {ex.Message}";
+            App.Current?.LoggingService?.LogError("Could not save settings", ex);
+            return false;
         }
     }
 

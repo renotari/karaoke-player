@@ -21,8 +21,16 @@ public class PlaylistManager : IPlaylistManager
     private readonly string _autoSaveFilePath;
     private readonly ObservableCollection<PlaylistItem> _currentPlaylist;
     private Timer? _autoSaveTimer;
-    private bool _isDirty;
     private readonly SemaphoreSlim _saveLock = new(1, 1);
+
+    // Auto-save: the playlist is snapshotted when it changes (on the thread that
+    // changes it, so the timer never reads a list being modified); the timer writes
+    // the latest snapshot. Revisions make sure a change made during a write is
+    // written too.
+    private readonly object _snapshotLock = new();
+    private List<SavedPlaylistItem> _snapshot = new();
+    private long _revision;
+    private long _savedRevision;
 
     public ObservableCollection<PlaylistItem> CurrentPlaylist => _currentPlaylist;
 
@@ -38,7 +46,7 @@ public class PlaylistManager : IPlaylistManager
         _currentPlaylist = new ObservableCollection<PlaylistItem>();
         _currentPlaylist.CollectionChanged += (s, e) =>
         {
-            _isDirty = true;
+            TakeSnapshot();
             ScheduleAutoSave();
         };
     }
@@ -361,38 +369,65 @@ public class PlaylistManager : IPlaylistManager
         return _currentPlaylist.ToList();
     }
 
+    private void TakeSnapshot()
+    {
+        lock (_snapshotLock)
+        {
+            _snapshot = _currentPlaylist.Select((item, index) => new SavedPlaylistItem
+            {
+                MediaFileId = item.MediaFileId,
+                Position = index,
+                AddedAt = item.AddedAt
+            }).ToList();
+            _revision++;
+        }
+    }
+
     private void ScheduleAutoSave()
     {
         // Debounce auto-save by 1 second
-        _autoSaveTimer?.Dispose();
-        _autoSaveTimer = new Timer(async _ => await AutoSaveAsync(), null, TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+        lock (_snapshotLock)
+        {
+            _autoSaveTimer?.Dispose();
+            _autoSaveTimer = new Timer(_ => _ = AutoSaveAsync(), null, TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+        }
     }
+
+    /// <summary>Writes the playlist now if it changed (called on exit: the debounce would lose the last edit).</summary>
+    public Task FlushAsync() => AutoSaveAsync();
 
     private async Task AutoSaveAsync()
     {
-        if (!_isDirty)
-            return;
-
         await _saveLock.WaitAsync();
         try
         {
-            var savedData = new SavedPlaylistData
+            List<SavedPlaylistItem> items;
+            long revision;
+            lock (_snapshotLock)
             {
-                Items = _currentPlaylist.ToArray().Select(item => new SavedPlaylistItem
-                {
-                    MediaFileId = item.MediaFileId,
-                    Position = item.Position,
-                    AddedAt = item.AddedAt
-                }).ToList()
-            };
+                if (_revision == _savedRevision)
+                    return;
+                items = _snapshot;
+                revision = _revision;
+            }
 
-            var json = JsonSerializer.Serialize(savedData, new JsonSerializerOptions
+            var json = JsonSerializer.Serialize(new SavedPlaylistData { Items = items },
+                new JsonSerializerOptions { WriteIndented = true });
+
+            // Write a temporary file and replace: a failed write keeps the previous playlist
+            var tempPath = _autoSaveFilePath + ".tmp";
+            await File.WriteAllTextAsync(tempPath, json);
+            File.Move(tempPath, _autoSaveFilePath, overwrite: true);
+
+            lock (_snapshotLock)
             {
-                WriteIndented = true
-            });
-
-            await File.WriteAllTextAsync(_autoSaveFilePath, json);
-            _isDirty = false;
+                _savedRevision = Math.Max(_savedRevision, revision);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Disk full, file locked...: keep the change pending, the next change retries
+            Console.WriteLine($"Could not save the current playlist: {ex.Message}");
         }
         finally
         {

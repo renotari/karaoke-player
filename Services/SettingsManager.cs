@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using KaraokePlayer.Models;
 using ReactiveUI;
@@ -14,6 +16,7 @@ public class SettingsManager : ReactiveObject, ISettingsManager
 {
     private readonly string _settingsFilePath;
     private AppSettings _currentSettings;
+    private readonly SemaphoreSlim _saveLock = new(1, 1);
 
     public event EventHandler<SettingsChangedEventArgs>? SettingsChanged;
 
@@ -98,10 +101,10 @@ public class SettingsManager : ReactiveObject, ISettingsManager
         // Validate all settings
         ValidateAllSettings(settings);
 
+        // Saved first: if the file cannot be written the active settings stay as they were
+        settings.LastModified = DateTime.UtcNow;
+        await WriteSettingsFileAsync(settings);
         _currentSettings = settings;
-        _currentSettings.LastModified = DateTime.UtcNow;
-
-        await SaveSettingsAsync();
 
         // Notify all properties changed
         this.RaisePropertyChanged(string.Empty);
@@ -115,39 +118,120 @@ public class SettingsManager : ReactiveObject, ISettingsManager
     }
 
     /// <summary>
-    /// Loads settings from JSON file
+    /// Loads settings from the JSON file. A damaged file is never thrown away:
+    /// unreadable JSON is kept as a backup copy before defaults are used, and a
+    /// single invalid value is reset on its own (the other preferences are kept).
     /// </summary>
     public async Task LoadSettingsAsync()
     {
+        if (!File.Exists(_settingsFilePath))
+        {
+            // First run - create default settings
+            _currentSettings = CreateDefaultSettings();
+            await TrySaveAsync();
+            return;
+        }
+
+        string json;
         try
         {
-            if (File.Exists(_settingsFilePath))
-            {
-                var json = await File.ReadAllTextAsync(_settingsFilePath);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json);
-                
-                if (settings != null)
-                {
-                    // Validate loaded settings
-                    ValidateAllSettings(settings);
-                    _currentSettings = settings;
-                    this.RaisePropertyChanged(string.Empty);
-                }
-            }
-            else
-            {
-                // First run - create default settings
-                _currentSettings = CreateDefaultSettings();
-                await SaveSettingsAsync();
-            }
+            json = await File.ReadAllTextAsync(_settingsFilePath);
         }
         catch (Exception ex)
         {
-            // Log error and use defaults
-            Console.WriteLine($"Error loading settings: {ex.Message}");
+            // Locked or unreadable right now: use defaults for this session, keep a copy
+            Console.WriteLine($"Error reading settings: {ex.Message}");
+            BackUpSettingsFile("unreadable");
             _currentSettings = CreateDefaultSettings();
-            await SaveSettingsAsync();
+            return;
         }
+
+        AppSettings? settings = null;
+        try
+        {
+            settings = JsonSerializer.Deserialize<AppSettings>(json);
+        }
+        catch (JsonException ex)
+        {
+            Console.WriteLine($"Settings file is not valid JSON: {ex.Message}");
+        }
+
+        if (settings == null)
+        {
+            BackUpSettingsFile("invalid");
+            _currentSettings = CreateDefaultSettings();
+            await TrySaveAsync();
+            return;
+        }
+
+        var repaired = RepairSettings(settings);
+        _currentSettings = settings;
+        this.RaisePropertyChanged(string.Empty);
+
+        if (repaired.Count > 0)
+        {
+            Console.WriteLine($"Invalid settings reset to their defaults: {string.Join(", ", repaired)}");
+            await TrySaveAsync();
+        }
+    }
+
+    /// <summary>Copies the settings file aside (settings.json.invalid-20261109-2130).</summary>
+    private void BackUpSettingsFile(string reason)
+    {
+        try
+        {
+            File.Copy(_settingsFilePath, $"{_settingsFilePath}.{reason}-{DateTime.Now:yyyyMMdd-HHmmss}", overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not back up the settings file: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Puts back the default value of every invalid field; returns their names.
+    /// An empty media folder is valid (not chosen yet).
+    /// </summary>
+    private List<string> RepairSettings(AppSettings settings)
+    {
+        var defaults = CreateDefaultSettings();
+        var repaired = new List<string>();
+
+        void Check<T>(string name, T value, Action reset)
+        {
+            if (!ValidateSetting(name, value, out _))
+            {
+                reset();
+                repaired.Add(name);
+            }
+        }
+
+        Check(nameof(AppSettings.Volume), settings.Volume, () => settings.Volume = defaults.Volume);
+        Check(nameof(AppSettings.CrossfadeDuration), settings.CrossfadeDuration, () => settings.CrossfadeDuration = defaults.CrossfadeDuration);
+        Check(nameof(AppSettings.FontSize), settings.FontSize, () => settings.FontSize = defaults.FontSize);
+        Check(nameof(AppSettings.PreloadBufferSize), settings.PreloadBufferSize, () => settings.PreloadBufferSize = defaults.PreloadBufferSize);
+        Check(nameof(AppSettings.CacheSize), settings.CacheSize, () => settings.CacheSize = defaults.CacheSize);
+        Check(nameof(AppSettings.VisualizationStyle), settings.VisualizationStyle, () => settings.VisualizationStyle = defaults.VisualizationStyle);
+        Check(nameof(AppSettings.Theme), settings.Theme, () => settings.Theme = defaults.Theme);
+
+        if (settings.MediaDirectory == null)
+        {
+            settings.MediaDirectory = string.Empty;
+            repaired.Add(nameof(AppSettings.MediaDirectory));
+        }
+        if (settings.YouTubeMaxHeight is < 144 or > 4320)
+        {
+            settings.YouTubeMaxHeight = defaults.YouTubeMaxHeight;
+            repaired.Add(nameof(AppSettings.YouTubeMaxHeight));
+        }
+
+        return repaired;
+    }
+
+    private async Task TrySaveAsync()
+    {
+        try { await SaveSettingsAsync(); }
+        catch { /* already logged; the settings in memory still work */ }
     }
 
     /// <summary>
@@ -155,22 +239,32 @@ public class SettingsManager : ReactiveObject, ISettingsManager
     /// </summary>
     public async Task SaveSettingsAsync()
     {
+        _currentSettings.LastModified = DateTime.UtcNow;
+        await WriteSettingsFileAsync(_currentSettings);
+    }
+
+    /// <summary>
+    /// Writes the settings: one save at a time, to a temporary file that then
+    /// replaces settings.json (a failed write keeps the previous file).
+    /// </summary>
+    private async Task WriteSettingsFileAsync(AppSettings settings)
+    {
+        await _saveLock.WaitAsync();
         try
         {
-            _currentSettings.LastModified = DateTime.UtcNow;
-            
-            var options = new JsonSerializerOptions
-            {
-                WriteIndented = true
-            };
-            
-            var json = JsonSerializer.Serialize(_currentSettings, options);
-            await File.WriteAllTextAsync(_settingsFilePath, json);
+            var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+            var tempPath = _settingsFilePath + ".tmp";
+            await File.WriteAllTextAsync(tempPath, json);
+            File.Move(tempPath, _settingsFilePath, overwrite: true);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error saving settings: {ex.Message}");
             throw;
+        }
+        finally
+        {
+            _saveLock.Release();
         }
     }
 
@@ -340,11 +434,8 @@ public class SettingsManager : ReactiveObject, ISettingsManager
             throw new ArgumentException(error);
         }
 
-        // Validate media directory
-        if (!ValidateSetting(nameof(AppSettings.MediaDirectory), settings.MediaDirectory, out error))
-        {
-            throw new ArgumentException(error);
-        }
+        // An empty media directory is allowed (not chosen yet): the folder picker and
+        // the Settings dialog make sure the user picks one
 
         // Validate font size
         if (!ValidateSetting(nameof(AppSettings.FontSize), settings.FontSize, out error))

@@ -390,6 +390,14 @@
                 Command="{Binding ResetToDefaultsCommand}"
                 HorizontalAlignment="Left" />
 
+        <TextBlock Grid.Column="1"
+                   Text="{Binding ApplyError}"
+                   IsVisible="{Binding ApplyError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                   Foreground="OrangeRed"
+                   TextWrapping="Wrap"
+                   VerticalAlignment="Center"
+                   Margin="10,0" />
+
         <Button Grid.Column="2"
                 Content="OK"
                 Command="{Binding OkCommand}"

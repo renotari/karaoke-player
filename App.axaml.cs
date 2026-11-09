@@ -696,9 +696,24 @@ public partial class App : Application
         {
             _loggingService?.LogInformation($"Scanning media directory {directory}...");
 
+            // Another folder was chosen meanwhile: its own scan takes over
+            bool Superseded() => !string.Equals(directory, _activeMediaDirectory, StringComparison.OrdinalIgnoreCase);
+            if (Superseded())
+                return;
+
             _mediaLibraryManager.StopMonitoring();
             await _mediaLibraryManager.ScanDirectoryAsync(directory);
+            if (Superseded())
+                return;
             _mediaLibraryManager.StartMonitoring();
+
+            if (_mediaLibraryManager.SkippedFolders.Count > 0)
+            {
+                var skipped = _mediaLibraryManager.SkippedFolders;
+                _loggingService?.LogWarning($"Folders not readable during the scan: {string.Join("; ", skipped)}");
+                _notificationService?.ShowWarning("Some folders could not be read",
+                    $"{skipped.Count} folder(s) skipped (songs already in the library were kept), e.g. {skipped[0]}", 10000);
+            }
 
             var files = await _mediaLibraryManager.GetMediaFilesAsync();
             foreach (var file in files)
@@ -760,6 +775,13 @@ public partial class App : Application
                 SaveWindowLayout(settings);
                 Task.Run(() => _settingsManager.SaveSettingsAsync()).Wait(TimeSpan.FromSeconds(5));
             }
+        });
+
+        // The playlist auto-save waits 1 s after a change: write the last edit now
+        Step("save playlist", () =>
+        {
+            if (_playlistManager != null)
+                Task.Run(() => _playlistManager.FlushAsync()).Wait(TimeSpan.FromSeconds(5));
         });
 
         Step("stop background work", () =>
