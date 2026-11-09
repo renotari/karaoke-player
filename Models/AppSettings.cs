@@ -74,6 +74,10 @@ public class AppSettings
     [NotMapped]
     public double PlaylistColumnWidth { get; set; } = 300;
 
+    /// <summary>Maximum height (480, 720, 1080) of the videos downloaded from YouTube</summary>
+    [NotMapped]
+    public int YouTubeMaxHeight { get; set; } = 720;
+
     /// <summary>
     /// Keyboard shortcuts stored as JSON
     /// </summary>
@@ -139,6 +143,7 @@ public class AppSettings
             { "FocusSearch", "Ctrl+F" },
             { "OpenPlaylistComposer", "Ctrl+P" },
             { "OpenSettings", "Ctrl+Comma" },
+            { "OpenYouTube", "Ctrl+T" },
             { "RefreshLibrary", "Ctrl+R" },
             { "ToggleDisplayMode", "Ctrl+D" },
             { "CloseDialog", "Escape" }

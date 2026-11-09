@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -250,23 +250,46 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
             // Wait a bit to ensure file is fully written
             await Task.Delay(500);
 
-            if (!File.Exists(e.FullPath))
-                return;
-
-            var fileInfo = new FileInfo(e.FullPath);
-            var mediaFile = CreateMediaFile(e.FullPath, fileInfo);
-
-            using var context = _dbContextFactory.CreateDbContext();
-
-            await context.MediaFiles.AddAsync(mediaFile);
-            await context.SaveChangesAsync();
-
-            OnFilesAdded(new MediaFilesChangedEventArgs { Files = new List<MediaFile> { mediaFile } });
+            await AddFileAsync(e.FullPath);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error handling file created '{e.FullPath}': {ex.Message}");
         }
+    }
+
+    private readonly System.Threading.SemaphoreSlim _addLock = new(1, 1);
+
+    /// <summary>
+    /// Adds one file to the library (raising FilesAdded) and returns it; when the
+    /// path is already in the library the existing entry is returned. Used by the
+    /// folder watcher and by the YouTube download (which both see the same file).
+    /// </summary>
+    public async Task<MediaFile?> AddFileAsync(string filePath)
+    {
+        if (!IsSupportedMediaFile(filePath) || !File.Exists(filePath))
+            return null;
+
+        MediaFile mediaFile;
+        await _addLock.WaitAsync();
+        try
+        {
+            using var context = _dbContextFactory.CreateDbContext();
+            var existing = await context.MediaFiles.FirstOrDefaultAsync(f => f.FilePath == filePath);
+            if (existing != null)
+                return existing;
+
+            mediaFile = CreateMediaFile(filePath, new FileInfo(filePath));
+            await context.MediaFiles.AddAsync(mediaFile);
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _addLock.Release();
+        }
+
+        OnFilesAdded(new MediaFilesChangedEventArgs { Files = new List<MediaFile> { mediaFile } });
+        return mediaFile;
     }
 
     private void OnFileDeleted(object sender, FileSystemEventArgs e)

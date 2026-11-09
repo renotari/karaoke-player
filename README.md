@@ -13,6 +13,7 @@ A professional karaoke and media player application for Windows with advanced fe
 - **Smart Media Library**: Automatic directory scanning with metadata extraction and thumbnail generation
 - **Advanced Search**: Fast search across 30,000+ files with partial matching and search history
 - **Karaoke Queue**: the song playing is on top, finished songs leave the queue; add songs "next" or at the end, reorder, shuffle, play now; save/load playlists (M3U/M3U8)
+- **Download from YouTube**: a song missing from the library can be searched on YouTube (or a link pasted), downloaded as MP4 into the media folder and queued
 - **Crossfade**: audio crossfade between songs with configurable duration (1-20 seconds); the video switches to the next song when the fade starts
 
 ### Display Modes
@@ -161,6 +162,15 @@ Shortcuts do not fire while typing in a text box (except function keys and Escap
 5. Reorder, remove, or shuffle as needed
 6. Save as M3U file or load directly for playback
 
+#### Download from YouTube
+
+1. Type the song in the catalog search; if it is not there click **Not here? Search on YouTube** (or File > Download from YouTube, `Ctrl+T`, or the YouTube button in Video Mode)
+2. The search adds "karaoke" to the text; you can also paste a YouTube link
+3. Click **Download** on a result: the video is saved in the `YouTube` subfolder of the media folder, added to the library and to the end of the queue
+4. Downloads go on in the background (status bar); the YouTube window can be closed
+
+The first time, the app downloads the tools it needs into its data folder: yt-dlp, ffmpeg (needed above 360p) and deno (needed by yt-dlp for YouTube), about 200 MB. When downloads stop working, YouTube has changed something: use Settings > YouTube > Download / Update tools. Video quality (480p/720p/1080p) is in the same tab.
+
 #### Audio Visualizations
 
 For MP3 files, the screen shows a music-reactive visualization (drawn by VLC) with title and artist underneath:
@@ -192,6 +202,10 @@ Change style in Settings > Display > Audio Visualization Style (applies from the
 - Visualization style
 - Window positions, sizes and column widths are remembered automatically
 
+**YouTube Tab**:
+- Quality of downloaded videos (480p, 720p, 1080p)
+- Status of the download tools, and a button to download/update them
+
 **Keyboard Tab**:
 - Customize all keyboard shortcuts
 - Reset to defaults
@@ -204,6 +218,7 @@ Change style in Settings > Display > Audio Visualization Style (applies from the
 - **Thumbnails**: `%APPDATA%\KaraokePlayer\Thumbnails`
 - **Logs**: `%APPDATA%\KaraokePlayer\Logs`
 - **Current Playlist**: `%APPDATA%\KaraokePlayer\current-playlist.json`
+- **YouTube tools** (yt-dlp, ffmpeg, deno): `%APPDATA%\KaraokePlayer\Tools`
 
 ## Troubleshooting
 

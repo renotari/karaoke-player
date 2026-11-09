@@ -68,6 +68,14 @@ Karaoke queue: `CurrentPlaylist[0]` is the song playing (while `CurrentSong != n
 
 `MediaLibraryManager` scans/monitors the folder and raises `FilesAdded/Removed/Modified`; `MetadataExtractor` and `ThumbnailGenerator` process queues in the background and raise events; the ViewModel updates every instance of the file (`MediaFile` implements `INotifyPropertyChanged` via `NotifyChanged()`). Thumbnails are decoded off-screen with LibVLC video callbacks and saved with SkiaSharp; `ThumbnailConverter` turns the path into a bitmap. `MediaFile.DisplayArtist/DisplayTitle/DisplayName` fall back to `FilenameParser` when metadata is missing.
 
+### YouTube downloads (`Services/YouTubeService.cs`, `ViewModels/MainWindowViewModel.YouTube.cs`)
+
+- Everything goes through **yt-dlp** run as an external process (search: `-J --flat-playlist ytsearchN:`, download with a `--progress-template` parsed line by line). It needs **ffmpeg** to merge video+audio above 360p (without it only single-file formats are chosen) and **deno** (JavaScript runtime yt-dlp needs for YouTube).
+- Tools are looked up in `AppPaths.Tools` (downloaded/updated by the app from GitHub: writable without admin rights, unlike Program Files), then `<app>\tools\`, then PATH. On Linux only yt-dlp is downloaded; ffmpeg/deno come from the system.
+- Files go to `<MediaDirectory>/YouTube/` named `Title [videoId].mp4`; the id lets the app recognize a video already downloaded, and `FilenameParser` strips it. Partial files stay in `AppPaths.DownloadTemp` (`-P temp:`), so the folder watcher only sees finished files.
+- A finished file is added with `MediaLibraryManager.AddFileAsync` (shared with the watcher, returns the existing entry if the watcher got there first) and queued at the end. One download at a time; downloads live in `MainWindowViewModel.Downloads` and survive closing the (non-modal) `YouTubeWindow`; they are cancelled on exit (the yt-dlp process is killed).
+- Settings: `YouTubeMaxHeight` (`[NotMapped]`), Settings > YouTube tab. Shortcut `OpenYouTube` (Ctrl+T: Ctrl+Y is redo in text boxes, so it would not work from the search box).
+
 ### Views
 
 - `MainWindow`: catalog, video area, playlist; Video Mode hides the side columns; in dual screen the center shows a panel instead of the video.

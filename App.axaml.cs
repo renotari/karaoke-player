@@ -44,6 +44,8 @@ public partial class App : Application
     public ISearchEngine? SearchEngine => _searchEngine;
     public IMediaLibraryManager? MediaLibraryManager => _mediaLibraryManager;
     public ILoggingService? LoggingService => _loggingService;
+    public IYouTubeService? YouTubeService => _youTubeService;
+    private IYouTubeService? _youTubeService;
 
     public override void Initialize()
     {
@@ -163,6 +165,8 @@ public partial class App : Application
         });
 
         Step("keyboard shortcuts", () => _keyboardShortcutManager = new KeyboardShortcutManager());
+
+        Step("YouTube downloads", () => _youTubeService = new YouTubeService(_loggingService));
 
         Step("media library", () =>
         {
@@ -483,7 +487,10 @@ public partial class App : Application
                 _notificationService,
                 _metadataExtractor,
                 _thumbnailGenerator
-            );
+            )
+            {
+                YouTubeService = _youTubeService
+            };
         }
 
         // Fallback to design-time constructor
@@ -618,6 +625,8 @@ public partial class App : Application
                 _mainWindowViewModel.AudioVisualizationEnabled =
                     !string.Equals(settings.VisualizationStyle, "none", StringComparison.OrdinalIgnoreCase);
                 _mainWindowViewModel.IsDualScreenMode = settings.DisplayMode == DisplayMode.Dual;
+                _mainWindowViewModel.MediaDirectory = settings.MediaDirectory ?? string.Empty;
+                _mainWindowViewModel.YouTubeMaxHeight = settings.YouTubeMaxHeight is >= 144 and <= 4320 ? settings.YouTubeMaxHeight : 720;
             }
 
             if (_mediaPlayerController != null)
@@ -755,6 +764,7 @@ public partial class App : Application
 
         Step("stop background work", () =>
         {
+            _mainWindowViewModel?.CancelAllDownloads();
             _metadataExtractor?.StopProcessing();
             _thumbnailGenerator?.StopProcessing();
         });
@@ -792,6 +802,7 @@ public partial class App : Application
             ("FocusSearch", mainWindow.FocusSearchBox),
             ("OpenPlaylistComposer", vm.OpenPlaylistComposer),
             ("OpenSettings", vm.OpenSettings),
+            ("OpenYouTube", vm.OpenYouTube),
             ("RefreshLibrary", () => vm.RefreshLibraryCommand.Execute(null)),
             ("ToggleDisplayMode", vm.ToggleDisplayMode),
             ("CloseDialog", vm.CloseDialog),

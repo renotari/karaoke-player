@@ -20,6 +20,8 @@ public partial class MainWindow : Window
     private IDisposable? _openMediaDirectorySubscription;
     private IDisposable? _showAboutSubscription;
     private IDisposable? _exitApplicationSubscription;
+    private IDisposable? _youTubeSubscription;
+    private YouTubeWindow? _youTubeWindow;
 
     public MainWindow()
     {
@@ -51,6 +53,9 @@ public partial class MainWindow : Window
 
         _exitApplicationSubscription = MessageBus.Current.Listen<ExitApplicationMessage>()
             .Subscribe(_ => Close());
+
+        _youTubeSubscription = MessageBus.Current.Listen<OpenYouTubeMessage>()
+            .Subscribe(message => Avalonia.Threading.Dispatcher.UIThread.Post(() => OpenYouTube(message.Query)));
     }
 
     /// <summary>
@@ -125,13 +130,54 @@ public partial class MainWindow : Window
             settingsWindow.DataContext = new SettingsViewModel(
                 app.SettingsManager,
                 app.MediaPlayerController,
-                settingsWindow);
+                settingsWindow,
+                app.YouTubeService);
 
             await settingsWindow.ShowDialog(this);
         }
         catch (Exception ex)
         {
             ReportError("Error opening settings", ex.Message, ex);
+        }
+    }
+
+    /// <summary>
+    /// Opens the YouTube window (not modal: the app stays usable). When it is
+    /// already open it is brought to the front, searching the new text if any.
+    /// </summary>
+    private void OpenYouTube(string? query)
+    {
+        try
+        {
+            if (DataContext is not MainWindowViewModel vm || App.Current?.YouTubeService is not { } service)
+            {
+                ReportError("YouTube not available", "See the log file for the startup error.");
+                return;
+            }
+
+            if (_youTubeWindow != null)
+            {
+                if (!string.IsNullOrWhiteSpace(query) && _youTubeWindow.DataContext is YouTubeViewModel open)
+                {
+                    var fresh = new YouTubeViewModel(service, vm, query);
+                    if (fresh.Query != open.Query)
+                    {
+                        open.Query = fresh.Query;
+                        if (open.SearchCommand.CanExecute(null))
+                            open.SearchCommand.Execute(null);
+                    }
+                }
+                _youTubeWindow.Activate();
+                return;
+            }
+
+            _youTubeWindow = new YouTubeWindow { DataContext = new YouTubeViewModel(service, vm, query) };
+            _youTubeWindow.Closed += (_, _) => _youTubeWindow = null;
+            _youTubeWindow.Show(this);
+        }
+        catch (Exception ex)
+        {
+            ReportError("Error opening YouTube window", ex.Message, ex);
         }
     }
 
@@ -425,5 +471,6 @@ public partial class MainWindow : Window
         _openMediaDirectorySubscription?.Dispose();
         _showAboutSubscription?.Dispose();
         _exitApplicationSubscription?.Dispose();
+        _youTubeSubscription?.Dispose();
     }
 }

@@ -61,6 +61,20 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private int _visualizationStyleIndex;
 
+    // YouTube Tab
+    /// <summary>0 = 480p, 1 = 720p, 2 = 1080p</summary>
+    [ObservableProperty]
+    private int _youTubeQualityIndex = 1;
+
+    [ObservableProperty]
+    private string _youTubeToolsStatus = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(UpdateYouTubeToolsCommand))]
+    private bool _isUpdatingYouTubeTools;
+
+    private readonly IYouTubeService? _youTubeService;
+
     // Performance Tab
     [ObservableProperty]
     private int _preloadBufferSize;
@@ -120,8 +134,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         // Commands are auto-generated and available in design-time
     }
 
-    public SettingsViewModel(ISettingsManager? settingsManager, IMediaPlayerController? mediaPlayerController, Window? owner)
+    public SettingsViewModel(ISettingsManager? settingsManager, IMediaPlayerController? mediaPlayerController, Window? owner,
+        IYouTubeService? youTubeService = null)
     {
+        _youTubeService = youTubeService;
+        RefreshYouTubeToolsStatus();
         _settingsManager = settingsManager ?? throw new ArgumentNullException(nameof(settingsManager));
         _mediaPlayerController = mediaPlayerController;
         _owner = owner;
@@ -166,6 +183,49 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     #endregion
 
     #region Command Implementations
+
+    private void RefreshYouTubeToolsStatus()
+    {
+        if (_youTubeService == null)
+        {
+            YouTubeToolsStatus = "YouTube downloads are not available";
+            return;
+        }
+
+        var tools = _youTubeService.GetToolsStatus();
+        static string Line(string name, string? path, string missing) => $"{name}: {path ?? missing}";
+        YouTubeToolsStatus = string.Join("\n",
+            Line("yt-dlp", tools.YtDlp, "not installed (downloaded automatically on first use)"),
+            Line("ffmpeg", tools.Ffmpeg, "not installed (videos limited to 360p)"),
+            Line("deno", tools.Deno, "not installed (some videos may not download)"));
+    }
+
+    private bool CanUpdateYouTubeTools() => _youTubeService != null && !IsUpdatingYouTubeTools;
+
+    /// <summary>Downloads the latest yt-dlp (and ffmpeg/deno on Windows): YouTube changes often.</summary>
+    [RelayCommand(CanExecute = nameof(CanUpdateYouTubeTools))]
+    private async Task UpdateYouTubeTools()
+    {
+        if (_youTubeService == null)
+            return;
+
+        IsUpdatingYouTubeTools = true;
+        try
+        {
+            var status = new Progress<string>(text => YouTubeToolsStatus = text);
+            await _youTubeService.EnsureToolsAsync(update: true, status);
+            RefreshYouTubeToolsStatus();
+        }
+        catch (Exception ex)
+        {
+            RefreshYouTubeToolsStatus();
+            YouTubeToolsStatus = $"Update failed: {ex.Message}\n\n{YouTubeToolsStatus}";
+        }
+        finally
+        {
+            IsUpdatingYouTubeTools = false;
+        }
+    }
 
     [RelayCommand]
     private async Task BrowseMediaDirectory()
@@ -320,6 +380,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         ("FocusSearch", "Focus Search"),
         ("OpenPlaylistComposer", "Open Playlist Composer"),
         ("OpenSettings", "Open Settings"),
+        ("OpenYouTube", "Download from YouTube"),
         ("RefreshLibrary", "Refresh Library"),
         ("ToggleDisplayMode", "Toggle Display Mode"),
         ("CloseDialog", "Exit Fullscreen/Close Dialog"),
@@ -475,6 +536,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
                 _ => 0
             };
 
+            // YouTube
+            YouTubeQualityIndex = settings.YouTubeMaxHeight switch { <= 480 => 0, >= 1080 => 2, _ => 1 };
+
             // Performance
             PreloadBufferSize = settings.PreloadBufferSize;
             CacheSize = settings.CacheSize;
@@ -516,6 +580,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             _ => "bars"
         };
 
+        // YouTube
+        settings.YouTubeMaxHeight = YouTubeQualityIndex switch { 0 => 480, 2 => 1080, _ => 720 };
+
         // Performance
         settings.PreloadBufferSize = PreloadBufferSize;
         settings.CacheSize = CacheSize;
@@ -553,6 +620,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             MainWindowBounds = source.MainWindowBounds,
             PlaybackWindowBounds = source.PlaybackWindowBounds,
             CatalogColumnWidth = source.CatalogColumnWidth,
+            YouTubeMaxHeight = source.YouTubeMaxHeight,
             PlaylistColumnWidth = source.PlaylistColumnWidth,
             CreatedAt = source.CreatedAt,
             LastModified = source.LastModified

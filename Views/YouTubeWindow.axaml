@@ -1,0 +1,103 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:KaraokePlayer.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="640"
+        x:Class="KaraokePlayer.Views.YouTubeWindow"
+        x:DataType="vm:YouTubeViewModel"
+        Title="Download from YouTube"
+        Width="760" Height="640"
+        MinWidth="560" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Icon="/Assets/avalonia-logo.ico">
+
+  <Design.DataContext>
+    <vm:YouTubeViewModel />
+  </Design.DataContext>
+
+  <Window.Resources>
+    <vm:SecondsToTimeConverter x:Key="SecondsToTime"/>
+  </Window.Resources>
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="12">
+
+    <!-- Search box: text or YouTube link -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+      <TextBox x:Name="QueryTextBox"
+               Grid.Column="0"
+               Text="{Binding Query, Mode=TwoWay}"
+               Watermark="Artist and title (e.g. Modugno Volare karaoke) or a YouTube link"
+               KeyDown="OnQueryKeyDown"/>
+      <Button Grid.Column="1" Content="Search" Margin="8,0,0,0" MinWidth="90"
+              Command="{Binding SearchCommand}"/>
+    </Grid>
+
+    <!-- Status -->
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,8">
+      <ProgressBar IsIndeterminate="True" Width="60" IsVisible="{Binding IsSearching}" VerticalAlignment="Center"/>
+      <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" FontSize="12"
+                 Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+    </StackPanel>
+
+    <!-- Results -->
+    <ListBox Grid.Row="2" ItemsSource="{Binding Results}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+      <ListBox.ItemTemplate>
+        <DataTemplate>
+          <Grid ColumnDefinitions="128,*,Auto" Margin="2" Background="Transparent">
+            <Border Grid.Column="0" Width="128" Height="72" CornerRadius="4" ClipToBounds="True"
+                    Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+              <Panel>
+                <TextBlock Text="▶" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
+              </Panel>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="10,0" VerticalAlignment="Center" Spacing="2">
+              <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2"
+                         TextTrimming="CharacterEllipsis"/>
+              <TextBlock Text="{Binding Channel}" FontSize="12" TextTrimming="CharacterEllipsis"
+                         Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+              <TextBlock Text="{Binding Duration, Converter={StaticResource SecondsToTime}}" FontSize="11"
+                         IsVisible="{Binding HasDuration}"
+                         Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+            </StackPanel>
+            <Panel Grid.Column="2" VerticalAlignment="Center">
+              <Button Content="⬇ Download"
+                      IsVisible="{Binding !IsRequested}"
+                      ToolTip.Tip="Save in the media folder and add to the end of the queue"
+                      Command="{Binding $parent[ListBox].((vm:YouTubeViewModel)DataContext).DownloadCommand}"
+                      CommandParameter="{Binding}"/>
+              <TextBlock Text="✓ Requested" IsVisible="{Binding IsRequested}" Foreground="Green"
+                         VerticalAlignment="Center"/>
+            </Panel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <!-- Downloads -->
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,12,0,4">
+      <TextBlock Text="Downloads" FontWeight="Bold" VerticalAlignment="Center"/>
+      <Button Grid.Column="1" Content="Clear finished" Command="{Binding ClearFinishedDownloadsCommand}"/>
+    </Grid>
+    <ListBox Grid.Row="4" ItemsSource="{Binding Downloads}" Height="150"
+             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+      <ListBox.ItemTemplate>
+        <DataTemplate>
+          <Grid ColumnDefinitions="*,140,Auto" Background="Transparent">
+            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0">
+              <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
+              <TextBlock Text="{Binding StatusText}" FontSize="11" TextTrimming="CharacterEllipsis"
+                         Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+            </StackPanel>
+            <ProgressBar Grid.Column="1" Minimum="0" Maximum="100" VerticalAlignment="Center"
+                         Value="{Binding Percent}" IsIndeterminate="{Binding IsIndeterminate}"
+                         IsVisible="{Binding IsActive}"/>
+            <Button Grid.Column="2" Content="Cancel" Margin="8,0,0,0"
+                    IsVisible="{Binding IsActive}" Command="{Binding CancelCommand}"/>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </Grid>
+</Window>

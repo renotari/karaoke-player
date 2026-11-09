@@ -9,12 +9,17 @@ namespace KaraokePlayer.Services;
 /// </summary>
 public static class FilenameParser
 {
+    private static readonly Regex YouTubeIdSuffix = new(@"\s*\[[A-Za-z0-9_-]{11}\]$", RegexOptions.Compiled);
+
     public static (string Artist, string Title) Parse(string filename)
     {
         if (string.IsNullOrWhiteSpace(filename))
         {
             return (string.Empty, string.Empty);
         }
+
+        // Files downloaded from YouTube end with the video id: "Title [dQw4w9WgXcQ]"
+        filename = YouTubeIdSuffix.Replace(filename, string.Empty);
 
         // Pattern 1: "Artist - Title" (with space around dash)
         var match = Regex.Match(filename, @"^(.+?)\s+-\s+(.+)$");

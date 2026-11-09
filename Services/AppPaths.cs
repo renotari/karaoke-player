@@ -34,6 +34,10 @@ public static class AppPaths
     public static string Thumbnails => Sub("Thumbnails");
     public static string Cache => Sub("cache");
     public static string Playlists => Sub("Playlists");
+    /// <summary>yt-dlp, ffmpeg and deno downloaded by the app (YouTube downloads)</summary>
+    public static string Tools => Sub("Tools");
+    /// <summary>Partial files of YouTube downloads (moved to the media folder when complete)</summary>
+    public static string DownloadTemp => Sub("DownloadTemp");
 
     private static string Sub(string name)
     {

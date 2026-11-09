@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using KaraokePlayer.Services;
 
@@ -105,6 +105,23 @@ public static class RunUnitTests
             {
                 failedTests++;
                 Console.WriteLine($"✗ PlaylistManager tests FAILED: {ex.Message}\n");
+            }
+            totalTests++;
+
+            // Test 6: YouTube downloads - yt-dlp output, links, file names
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("TEST 6: YouTube Service - Parsing and File Names");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            try
+            {
+                await YouTubeServiceTest.RunTests();
+                passedTests++;
+                Console.WriteLine("✓ YouTubeService tests PASSED\n");
+            }
+            catch (Exception ex)
+            {
+                failedTests++;
+                Console.WriteLine($"✗ YouTubeService tests FAILED: {ex.Message}\n");
             }
             totalTests++;
 

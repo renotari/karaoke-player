@@ -281,6 +281,36 @@
         </ScrollViewer>
       </TabItem>
 
+      <!-- YouTube Tab -->
+      <TabItem Header="YouTube">
+        <ScrollViewer>
+          <StackPanel Spacing="15" Margin="20">
+
+            <StackPanel Spacing="5">
+              <TextBlock Text="Video Quality" FontWeight="Bold" />
+              <ComboBox SelectedIndex="{Binding YouTubeQualityIndex}" HorizontalAlignment="Stretch">
+                <ComboBoxItem Content="480p (smaller files)" />
+                <ComboBoxItem Content="720p (recommended)" />
+                <ComboBoxItem Content="1080p (best quality, larger files)" />
+              </ComboBox>
+              <TextBlock Text="Maximum resolution of the videos downloaded from YouTube (MP4). Videos go to the YouTube subfolder of the media folder."
+                         FontSize="11" Foreground="Gray" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel Spacing="5">
+              <TextBlock Text="Download Tools" FontWeight="Bold" />
+              <TextBlock Text="{Binding YouTubeToolsStatus}" FontSize="11" TextWrapping="Wrap" />
+              <Button Content="Download / Update tools"
+                      Command="{Binding UpdateYouTubeToolsCommand}"
+                      Margin="0,5,0,0" />
+              <TextBlock Text="yt-dlp, ffmpeg and deno are downloaded into the app data folder. If downloads stop working, YouTube has probably changed something: update the tools."
+                         FontSize="11" Foreground="Gray" TextWrapping="Wrap" />
+            </StackPanel>
+
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
       <!-- Performance Tab -->
       <TabItem Header="Performance">
         <ScrollViewer>

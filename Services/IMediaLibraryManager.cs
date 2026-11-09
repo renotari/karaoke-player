@@ -49,6 +49,13 @@ public interface IMediaLibraryManager
     Task<List<MediaFile>> GetMediaFilesAsync();
 
     /// <summary>
+    /// Adds a single file (e.g. a finished download) and returns it; returns the
+    /// existing entry when the path is already in the library, null when the file
+    /// is missing or not a supported media file.
+    /// </summary>
+    Task<MediaFile?> AddFileAsync(string filePath);
+
+    /// <summary>
     /// Starts monitoring the media directory for changes
     /// </summary>
     void StartMonitoring();
