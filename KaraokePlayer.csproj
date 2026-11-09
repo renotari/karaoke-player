@@ -49,6 +49,19 @@
     <VlcWindowsX86Enabled>false</VlcWindowsX86Enabled>
   </PropertyGroup>
 
+  <!-- The LibVLC package collects its files before the build: run it for publish too,
+       or a publish with the no-build option leaves libvlc out (the installed app cannot play). -->
+  <Target Name="CollectVlcFilesForPublish"
+          Condition="'$(IsWindowsTarget)' == 'true'"
+          BeforeTargets="AssignTargetPaths"
+          DependsOnTargets="CollectVlcFilesToCopyWindows" />
+
+  <!-- Never produce a Windows package without LibVLC -->
+  <Target Name="VerifyLibVlcPublished" Condition="'$(IsWindowsTarget)' == 'true'" AfterTargets="Publish">
+    <Error Condition="!Exists('$(PublishDir)libvlc\win-x64\libvlc.dll')"
+           Text="LibVLC missing from the publish folder ($(PublishDir)libvlc\win-x64\libvlc.dll): the installed app could not play media." />
+  </Target>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.22" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />

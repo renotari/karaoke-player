@@ -7,7 +7,7 @@ echo ========================================
 echo.
 
 REM Clean previous builds
-echo [1/4] Cleaning previous builds...
+echo [1/3] Cleaning previous builds...
 if exist "bin\Release" rmdir /s /q "bin\Release"
 if exist "obj\Release" rmdir /s /q "obj\Release"
 if exist "installer" rmdir /s /q "installer"
@@ -15,7 +15,7 @@ echo Done.
 echo.
 
 REM Restore dependencies
-echo [2/4] Restoring dependencies...
+echo [2/3] Restoring dependencies...
 dotnet restore
 if %errorlevel% neq 0 (
     echo ERROR: Failed to restore dependencies
@@ -25,24 +25,18 @@ if %errorlevel% neq 0 (
 echo Done.
 echo.
 
-REM Build release version
-echo [3/4] Building release version...
-dotnet build --configuration Release --no-restore
-if %errorlevel% neq 0 (
-    echo ERROR: Build failed
-    pause
-    exit /b %errorlevel%
-)
-echo Done.
-echo.
-
-REM Publish self-contained application
-echo [4/4] Publishing self-contained application...
-dotnet publish -c Release -r win-x64 --self-contained --no-build
+REM Publish (builds too): self-contained, with LibVLC
+echo [3/3] Building and publishing self-contained application...
+dotnet publish -c Release -r win-x64 --self-contained --no-restore
 if %errorlevel% neq 0 (
     echo ERROR: Publish failed
     pause
     exit /b %errorlevel%
+)
+if not exist "bin\Release\net10.0\win-x64\publish\libvlc\win-x64\libvlc.dll" (
+    echo ERROR: LibVLC is missing from the publish folder
+    pause
+    exit /b 1
 )
 echo Done.
 echo.
