@@ -926,14 +926,24 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void HandleMediaEnded(MediaEndedEventArgs e)
     {
+        // Late event of a song that is no longer the current one (Next was pressed
+        // while the end was on its way): it must not skip the new song
+        if (IsStale(e.MediaFile))
+            return;
         _ = AdvanceAsync(playNext: AutoPlayEnabled);
     }
+
+    private bool IsStale(MediaFile? eventMedia) =>
+        eventMedia != null && (CurrentSong == null || CurrentSong.Id != eventMedia.Id);
 
     private void OnPlaybackError(object? sender, PlaybackErrorEventArgs e)
         => OnUiThread(() => HandlePlaybackError(e));
 
     private void HandlePlaybackError(PlaybackErrorEventArgs e)
     {
+        if (IsStale(e.MediaFile))
+            return;
+
         var name = e.MediaFile?.DisplayName ?? CurrentSong?.DisplayName ?? "song";
         StatusMessage = $"Playback error: {e.ErrorMessage}";
         _notificationService?.ShowError("Cannot play song", $"{name}: {e.ErrorMessage}. Skipping to the next song.");

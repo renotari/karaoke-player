@@ -46,6 +46,7 @@ public partial class App : Application
     public ILoggingService? LoggingService => _loggingService;
     public IYouTubeService? YouTubeService => _youTubeService;
     private IYouTubeService? _youTubeService;
+    private LibVLC? _thumbnailLibVLC;
 
     public override void Initialize()
     {
@@ -205,7 +206,11 @@ public partial class App : Application
 
             // Create LibVLC instance for thumbnail generator
             if (_dbContextFactory != null)
-                _thumbnailGenerator = new ThumbnailGenerator(_dbContextFactory, new LibVLC());
+            {
+                // Owned by the App: disposed after the generator on exit
+                _thumbnailLibVLC = new LibVLC();
+                _thumbnailGenerator = new ThumbnailGenerator(_dbContextFactory, _thumbnailLibVLC);
+            }
         });
 
         if (_startupErrors.Count == 0)
@@ -795,6 +800,7 @@ public partial class App : Application
         Step("dispose library", () => (_mediaLibraryManager as IDisposable)?.Dispose());
         Step("dispose metadata extractor", () => (_metadataExtractor as IDisposable)?.Dispose());
         Step("dispose thumbnail generator", () => (_thumbnailGenerator as IDisposable)?.Dispose());
+        Step("dispose thumbnail LibVLC", () => _thumbnailLibVLC?.Dispose());
 
         _loggingService?.LogInformation("Application shutdown complete");
     }

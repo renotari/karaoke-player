@@ -27,7 +27,7 @@ dotnet publish -c Release -r win-x64           # Windows build, also cross-compi
 build-release.bat / build-installer.bat        # Windows: release build / Inno Setup installer
 ```
 
-Tests are plain runner classes (no xUnit): `Services/*Test.cs`, orchestrated by `TestRunner.cs`, `RunUnitTests.cs`, `IntegrationTests.cs`. Test modes set `KARAOKE_PLAYER_DATA_DIR` to a temporary folder (see `Program.cs`), so they never touch the real user data. The compiler must stay at 0 warnings.
+Tests are plain runner classes (no xUnit): `Services/*Test.cs`, orchestrated by `TestRunner.cs`, `RunUnitTests.cs`, `IntegrationTests.cs`. Test modes set `KARAOKE_PLAYER_DATA_DIR` to a temporary folder (see `Program.cs`), so they never touch the real user data. Report a failed check with `TestFailures.Fail("✗ ...")` (or throw): the test modes exit with code 1 when any was recorded; a plain `Console.WriteLine` of a failure does not fail the run. In the headless sandbox run `--test` with `KARAOKE_PLAYER_VLC_OPTIONS=--aout=dummy`. The compiler must stay at 0 warnings.
 
 ### Running the GUI without a display (sandbox)
 
@@ -55,6 +55,7 @@ Tests are plain runner classes (no xUnit): `Services/*Test.cs`, orchestrated by 
 
 - Two slots, each with its own native video surface (`EmbeddedVideoView`, a `NativeControlHost` that exposes its handle). LibVLC cannot reuse a window another player is still using, so each slot renders into its own surface and the UI shows the one of `ActivePlayerIndex` (`IsVideoSurfaceA/BVisible`).
 - Each slot has a player for video/plain audio and, created on demand, a player from a second `LibVLC` instance started with `--audio-visual=visual --effect-list=...`: audio visualizations are an instance-level option (per-media options are ignored, and on the main instance they would add a visualization window to videos).
+- Preload requests are versioned (a request overtaken by a newer one or by `ClearPreload` is dropped); a failed preload is only logged (it must not skip the song playing). The ViewModel ignores `MediaEnded`/`PlaybackError` for a song that is no longer `CurrentSong`.
 - Crossfade: the ViewModel keeps the next song preloaded (`PreloadNextAsync` / `ClearPreload`); near the end the controller starts the other slot, makes it the current one immediately (`CrossfadeStarted` event, no `MediaEnded` for the outgoing song) and fades the two volumes. Events from non-current players are ignored.
 - LibVLCSharp raises events with its internal event manager as `sender`: handlers are bound per player with closures (`Subscribe`).
 - `KARAOKE_PLAYER_VLC_OPTIONS` adds LibVLC command-line options (troubleshooting).
@@ -66,7 +67,7 @@ Karaoke queue: `CurrentPlaylist[0]` is the song playing (while `CurrentSong != n
 
 ### Library
 
-`MediaLibraryManager` scans/monitors the folder and raises `FilesAdded/Removed/Modified`; `MetadataExtractor` and `ThumbnailGenerator` process queues in the background and raise events; the ViewModel updates every instance of the file (`MediaFile` implements `INotifyPropertyChanged` via `NotifyChanged()`). Thumbnails are decoded off-screen with LibVLC video callbacks and saved with SkiaSharp; `ThumbnailConverter` turns the path into a bitmap. `MediaFile.DisplayArtist/DisplayTitle/DisplayName` fall back to `FilenameParser` when metadata is missing.
+`MediaLibraryManager` scans/monitors the folder and raises `FilesAdded/Removed/Modified`. Scans, `AddFileAsync` and renames are serialized by one lock. Folders that cannot be read are skipped and their songs kept (`SkippedFolders`, ids are referenced by the saved playlist). Watcher events (files, folders, overflow) trigger a debounced incremental rescan; only media-file renames are applied directly (keeping the id). A file whose timestamp changed gets `MetadataLoaded/ThumbnailLoaded = false` in the database; `MetadataExtractor` and `ThumbnailGenerator` process queues in the background and raise events; the ViewModel updates every instance of the file (`MediaFile` implements `INotifyPropertyChanged` via `NotifyChanged()`). Thumbnails are decoded off-screen with LibVLC video callbacks and saved with SkiaSharp; `ThumbnailConverter` turns the path into a bitmap. `MediaFile.DisplayArtist/DisplayTitle/DisplayName` fall back to `FilenameParser` when metadata is missing.
 
 ### YouTube downloads (`Services/YouTubeService.cs`, `ViewModels/MainWindowViewModel.YouTube.cs`)
 
@@ -82,8 +83,12 @@ Karaoke queue: `CurrentPlaylist[0]` is the song playing (while `CurrentSong != n
 - `PlaybackWindow`: dual-screen audience window, bound to the same `MainWindowViewModel`.
 - `SettingsWindow` (`SettingsViewModel` gets the dialog as owner), `PlaylistComposerWindow` (its ViewModel needs `SetWindow`), `WelcomeDialog` (first run).
 - Time values are seconds (`double`): format them with `SecondsToTimeConverter`, not `StringFormat`.
+- Confirmations and error messages: `Views/MessageDialog` (`ConfirmAsync`, `ShowAsync`); a WinExe has no console, so `Console.WriteLine` is not a way to tell the user.
+- M3U files: `Services/PlaylistFile` (relative paths, matching by exact path or a unique file name, safe playlist file names), used by both `PlaylistManager` and the Playlist Composer.
 
 ### Data locations (`Services/AppPaths.cs`)
+
+Settings and the session playlist are written to a temporary file and then replaced (a failed write keeps the old file); a settings file that cannot be parsed is backed up (`settings.json.invalid-<date>`) before defaults are used, and a single invalid value is reset on its own. The playlist auto-save is flushed on exit.
 
 `%APPDATA%\KaraokePlayer\` on Windows, `~/.config/KaraokePlayer/` on Linux (override: `KARAOKE_PLAYER_DATA_DIR`): `settings.json`, `karaoke.db`, `current-playlist.json`, `Logs/`, `Thumbnails/`, `Playlists/`. `AppSettings` is also an EF entity: new settings that live only in the JSON must be `[NotMapped]` (otherwise a migration is needed), and must be copied in `SettingsViewModel.CloneSettings`.
 

@@ -34,6 +34,9 @@ public class PlaylistManager : IPlaylistManager
 
     public ObservableCollection<PlaylistItem> CurrentPlaylist => _currentPlaylist;
 
+    /// <summary>Entries of the last loaded M3U that are not in the library.</summary>
+    public int LastLoadMissingCount { get; private set; }
+
     public event EventHandler<PlaylistChangedEventArgs>? PlaylistChanged;
 
     public PlaylistManager(IDbContextFactory dbContextFactory)
@@ -243,60 +246,37 @@ public class PlaylistManager : IPlaylistManager
         if (!File.Exists(filePath))
             throw new FileNotFoundException("Playlist file not found", filePath);
 
-        var lines = await File.ReadAllLinesAsync(filePath, Encoding.UTF8);
-        var filePaths = new List<string>();
+        var entries = await Task.Run(() => PlaylistFile.ReadEntries(filePath));
 
-        foreach (var line in lines)
+        List<MediaFile> library;
+        using (var context = _dbContextFactory.CreateDbContext())
         {
-            var trimmedLine = line.Trim();
-            
-            // Skip empty lines and comments (except #EXTM3U header)
-            if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("#"))
-                continue;
-
-            filePaths.Add(trimmedLine);
+            library = await context.MediaFiles.Include(m => m.Metadata).AsNoTracking().ToListAsync();
         }
 
-        // Clear current playlist
+        // Songs that are not in the library are left out (and counted): the queue
+        // only holds playable songs, so its indices match what the UI shows
         _currentPlaylist.Clear();
-
-        using var context = _dbContextFactory.CreateDbContext();
-
-        // Load media files from database
-        foreach (var path in filePaths)
+        var missing = 0;
+        foreach (var entry in entries)
         {
-            var mediaFile = await context.MediaFiles
-                .Include(m => m.Metadata)
-                .FirstOrDefaultAsync(m => m.FilePath == path);
-
-            if (mediaFile != null)
+            var mediaFile = PlaylistFile.Resolve(entry, library);
+            if (mediaFile == null)
             {
-                var playlistItem = new PlaylistItem
-                {
-                    MediaFileId = mediaFile.Id,
-                    MediaFile = mediaFile,
-                    Position = _currentPlaylist.Count,
-                    AddedAt = DateTime.UtcNow,
-                    IsDuplicate = false
-                };
-
-                _currentPlaylist.Add(playlistItem);
+                missing++;
+                continue;
             }
-            else
+
+            _currentPlaylist.Add(new PlaylistItem
             {
-                // File not found in database - mark as error
-                var errorItem = new PlaylistItem
-                {
-                    MediaFileId = Guid.NewGuid().ToString(),
-                    Position = _currentPlaylist.Count,
-                    AddedAt = DateTime.UtcNow,
-                    IsDuplicate = false,
-                    Error = $"File not found: {path}"
-                };
-
-                _currentPlaylist.Add(errorItem);
-            }
+                MediaFileId = mediaFile.Id,
+                MediaFile = mediaFile,
+                Position = _currentPlaylist.Count,
+                AddedAt = DateTime.UtcNow,
+                IsDuplicate = false
+            });
         }
+        LastLoadMissingCount = missing;
 
         // Update duplicate flags
         UpdateDuplicateFlags();

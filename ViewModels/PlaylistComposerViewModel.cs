@@ -391,24 +391,18 @@ public partial class PlaylistComposerViewModel : ViewModelBase, IDisposable
     {
         if (!File.Exists(filePath)) return;
 
-        var lines = await File.ReadAllLinesAsync(filePath);
+        var entries = await Task.Run(() => PlaylistFile.ReadEntries(filePath));
+        var library = CatalogFiles.ToList();
         var loadedFiles = new List<MediaFile>();
+        var missing = new List<string>();
 
-        foreach (var line in lines)
+        foreach (var entry in entries)
         {
-            // Skip comments and empty lines
-            if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
-
-            // Find matching file in catalog
-            var matchingFile = CatalogFiles.FirstOrDefault(f => 
-                f.FilePath.Equals(line, StringComparison.OrdinalIgnoreCase) ||
-                Path.GetFileName(f.FilePath).Equals(Path.GetFileName(line), StringComparison.OrdinalIgnoreCase)
-            );
-
-            if (matchingFile != null)
-            {
-                loadedFiles.Add(matchingFile);
-            }
+            var match = PlaylistFile.Resolve(entry, library);
+            if (match != null)
+                loadedFiles.Add(match);
+            else
+                missing.Add(entry);
         }
 
         // Update composed playlist
@@ -420,6 +414,14 @@ public partial class PlaylistComposerViewModel : ViewModelBase, IDisposable
 
         // Set playlist name from filename
         PlaylistName = Path.GetFileNameWithoutExtension(filePath);
+
+        if (missing.Count > 0)
+        {
+            var list = string.Join("\n", missing.Take(15).Select(Path.GetFileName));
+            var more = missing.Count > 15 ? $"\n... and {missing.Count - 15} more" : string.Empty;
+            await ShowErrorDialog("Songs not found",
+                $"{missing.Count} song(s) of the playlist are not in the library (or more than one file has that name):\n\n{list}{more}");
+        }
     }
 
     [RelayCommand]
@@ -505,13 +507,20 @@ public partial class PlaylistComposerViewModel : ViewModelBase, IDisposable
                 await _playlistManager.AddSongAsync(file, "end");
             }
 
-            // Optionally save to file as well
-            if (_window != null && !string.IsNullOrWhiteSpace(PlaylistName))
+            // Also saved in the Playlists folder (the name cannot point elsewhere)
+            var name = PlaylistFile.SafeFileName(PlaylistName ?? string.Empty);
+            if (_window != null && name.Length > 0)
             {
-                var userDataPath = AppPaths.Playlists;
-
-                var filePath = Path.Combine(userDataPath, $"{PlaylistName}.m3u");
-                await SavePlaylistToFileAsync(filePath);
+                try
+                {
+                    await SavePlaylistToFileAsync(Path.Combine(AppPaths.Playlists, $"{name}.m3u"));
+                }
+                catch (Exception ex)
+                {
+                    // The queue is already loaded: say only that the copy was not saved
+                    await ShowErrorDialog("Playlist not saved",
+                        $"The songs are in the queue, but the playlist could not be saved: {ex.Message}");
+                }
             }
 
             // Close the window
@@ -535,18 +544,14 @@ public partial class PlaylistComposerViewModel : ViewModelBase, IDisposable
     private async Task<bool> ShowConfirmationDialog(string title, string message)
     {
         if (_window == null) return false;
-
-        // For now, return true (confirm). In a full implementation, this would show a proper dialog.
-        // Avalonia doesn't have built-in MessageBox, so we'd need to create a custom dialog window.
-        return true;
+        return await Views.MessageDialog.ConfirmAsync(_window, title, message, "Clear", "Cancel");
     }
 
     private async Task ShowErrorDialog(string title, string message)
     {
+        App.Current?.LoggingService?.LogWarning($"{title}: {message}");
         if (_window == null) return;
-
-        // For now, just log. In a full implementation, this would show a proper error dialog.
-        Console.WriteLine($"{title}: {message}");
+        await Views.MessageDialog.ShowAsync(_window, title, message);
     }
 
     public void Dispose()

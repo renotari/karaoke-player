@@ -188,8 +188,11 @@ public class MetadataExtractor : IMetadataExtractor, IDisposable
         _isProcessing = false;
         _cancellationTokenSource.Cancel();
 
-        // Don't block waiting for task - let it complete naturally
-        // The cancellation token will signal it to stop processing
+        // Let the item in progress finish (bounded wait), so nothing touches the
+        // database or native resources after Dispose. The worker runs on the thread
+        // pool, so waiting here cannot deadlock the UI thread.
+        try { _processingTask?.Wait(TimeSpan.FromSeconds(3)); }
+        catch (AggregateException) { /* cancelled or failed: it is over either way */ }
     }
 
     /// <summary>

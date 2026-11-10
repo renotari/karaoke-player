@@ -125,6 +125,23 @@ public static class RunUnitTests
             }
             totalTests++;
 
+            // Test 7: Playlist files - M3U entries and matching
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("TEST 7: Playlist Files - M3U Paths and Matching");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            try
+            {
+                await PlaylistFileTest.RunTests();
+                passedTests++;
+                Console.WriteLine("✓ PlaylistFile tests PASSED\n");
+            }
+            catch (Exception ex)
+            {
+                failedTests++;
+                Console.WriteLine($"✗ PlaylistFile tests FAILED: {ex.Message}\n");
+            }
+            totalTests++;
+
             // Summary
             Console.WriteLine();
             Console.WriteLine("╔════════════════════════════════════════════════════════════╗");

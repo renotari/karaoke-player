@@ -51,9 +51,14 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     private MediaFile? _currentMedia;
     private MediaFile? _preloadedMedia;
     private MediaFile? _pendingPreload; // requested while a crossfade was using the other player
+    private long _pendingPreloadVersion;
+    // Every preload request (and ClearPreload) gets a new version: a request that
+    // reaches the lock after a newer one, or after a clear, is dropped
+    private long _preloadVersion;
     private float _volume = 0.5f;
     private bool _subtitlesEnabled = true;
     private string? _audioDeviceId; // null = system default
+    private bool _audioDeviceChanged; // a specific device was set: going back to default needs a reset
     private (IntPtr First, IntPtr Second) _videoWindows;
 
     // Crossfade
@@ -302,11 +307,11 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
                     }
 
                     player.Volume = (int)(_volume * 100);
+                    // Before Play: a fast Playing event must not be overwritten by Buffering
+                    State = PlaybackState.Buffering;
                     player.Play();
                     ApplyAudioDevice(player);
                 }
-
-                State = PlaybackState.Buffering;
             }
             catch (Exception ex)
             {
@@ -514,6 +519,8 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     public void SetAudioDevice(string deviceId)
     {
         _audioDeviceId = string.IsNullOrWhiteSpace(deviceId) ? null : deviceId;
+        if (_audioDeviceId != null)
+            _audioDeviceChanged = true;
         foreach (var player in AllPlayers())
         {
             ApplyAudioDevice(player);
@@ -522,12 +529,14 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
 
     private void ApplyAudioDevice(MediaPlayer player)
     {
-        if (_audioDeviceId == null)
+        // Default device: nothing to do, unless another device was selected before
+        // (an empty id makes LibVLC go back to the system default)
+        if (_audioDeviceId == null && !_audioDeviceChanged)
             return;
 
         try
         {
-            player.SetOutputDevice(_audioDeviceId);
+            player.SetOutputDevice(_audioDeviceId ?? string.Empty);
         }
         catch (Exception ex)
         {
@@ -647,47 +656,53 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         if (mediaFile == null)
             throw new ArgumentNullException(nameof(mediaFile));
 
-        await Task.Run(() =>
+        var version = Interlocked.Increment(ref _preloadVersion);
+        await Task.Run(() => Preload(mediaFile, version));
+    }
+
+    private void Preload(MediaFile mediaFile, long version)
+    {
+        try
         {
-            try
+            lock (_sync)
             {
-                lock (_sync)
+                // A newer request or a clear came first: this one is stale
+                if (version != Interlocked.Read(ref _preloadVersion) || _disposed)
+                    return;
+
+                if (_crossfadeInProgress)
                 {
-                    if (_crossfadeInProgress)
-                    {
-                        // The other player is still fading out the previous song
-                        _pendingPreload = mediaFile;
-                        return;
-                    }
-
-                    var target = PlayerFor(1 - _active, mediaFile);
-                    if (_preloadedMedia?.Id == mediaFile.Id && ReferenceEquals(target, _preloadPlayer) && target.Media != null)
-                        return;
-
-                    // The other kind of player of that slot must not keep a stale song
-                    if (_preloadPlayer != null && !ReferenceEquals(_preloadPlayer, target))
-                        _preloadPlayer.Stop();
-
-                    LoadInto(target, mediaFile);
-                    _preloadPlayer = target;
+                    // The other player is still fading out the previous song
+                    _pendingPreload = mediaFile;
+                    _pendingPreloadVersion = version;
+                    return;
                 }
+
+                var target = PlayerFor(1 - _active, mediaFile);
+                if (_preloadedMedia?.Id == mediaFile.Id && ReferenceEquals(target, _preloadPlayer) && target.Media != null)
+                    return;
+
+                // The other kind of player of that slot must not keep a stale song
+                if (_preloadPlayer != null && !ReferenceEquals(_preloadPlayer, target))
+                    _preloadPlayer.Stop();
+
+                LoadInto(target, mediaFile);
+                _preloadPlayer = target;
             }
-            catch (Exception ex)
-            {
-                _preloadedMedia = null;
-                PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
-                {
-                    ErrorMessage = $"Failed to preload media: {ex.Message}",
-                    MediaFile = mediaFile,
-                    Exception = ex
-                });
-            }
-        });
+        }
+        catch (Exception ex)
+        {
+            // Only the next song is affected (it fails again, and is skipped, when its
+            // turn comes): never report it as an error of the song playing now
+            _preloadedMedia = null;
+            _loggingService?.LogWarning($"Failed to preload '{mediaFile.Filename}': {ex.Message}");
+        }
     }
 
     /// <summary>Forgets the preloaded song (the queue has no next song any more).</summary>
     public void ClearPreload()
     {
+        Interlocked.Increment(ref _preloadVersion);
         lock (_sync)
         {
             _pendingPreload = null;
@@ -799,19 +814,30 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
 
         var outgoing = _outgoing;
         _outgoing = null;
-        // Stop on the thread pool: this may run on the timer thread, never on a LibVLC thread
-        ThreadPool.QueueUserWorkItem(_ =>
-        {
-            try { outgoing?.Stop(); } catch { /* already stopped */ }
-        });
+        var next = _pendingPreload;
+        var nextVersion = _pendingPreloadVersion;
+        _pendingPreload = null;
         Active.Volume = (int)(_volume * 100);
 
-        if (_pendingPreload != null)
+        // Stop on the thread pool (this may run on the timer thread, never on a LibVLC
+        // thread), and only then preload into that player: the stop must not hit the
+        // song loaded after it
+        ThreadPool.QueueUserWorkItem(_ =>
         {
-            var next = _pendingPreload;
-            _pendingPreload = null;
-            _ = PreloadNextAsync(next);
-        }
+            bool stillOutgoing;
+            lock (_sync)
+            {
+                stillOutgoing = outgoing != null && !_disposed
+                                && !ReferenceEquals(outgoing, _current) && !ReferenceEquals(outgoing, _preloadPlayer);
+            }
+            if (stillOutgoing)
+            {
+                try { outgoing!.Stop(); } catch { /* already stopped */ }
+            }
+
+            if (next != null)
+                Preload(next, nextVersion);
+        });
     }
 
     #endregion

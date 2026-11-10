@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -312,6 +312,54 @@ public class SearchEngineTest
         Console.WriteLine("✓ TestRelevanceRanking passed");
     }
 
+    private static MediaFile Song(string id, string title, string artist) => new()
+    {
+        Id = id,
+        Filename = $"{artist} - {title}.mp4",
+        FilePath = $"/media/{id}.mp4",
+        Type = MediaType.Video,
+        Format = MediaFormat.MP4,
+        MetadataLoaded = true,
+        Metadata = new MediaMetadata { MediaFileId = id, Title = title, Artist = artist }
+    };
+
+    /// <summary>More than 1000 matches: the exact title, stored last, must still come first.</summary>
+    public static async Task TestExactMatchBeyondLimit()
+    {
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
+        for (int i = 0; i < 1200; i++)
+            context.MediaFiles.Add(Song($"a{i:D5}", $"My love song {i}", "Band"));
+        context.MediaFiles.Add(Song("z99999", "Love", "Singer"));
+        await context.SaveChangesAsync();
+
+        var results = await new SearchEngine(factory).SearchAsync("love");
+        if (results.Count == 0 || results[0].Id != "z99999")
+            throw new Exception($"Exact match 'Love' should be first, got '{results.FirstOrDefault()?.Metadata?.Title}'");
+
+        Console.WriteLine("✓ TestExactMatchBeyondLimit passed");
+    }
+
+    /// <summary>% and _ typed by the user are plain characters.</summary>
+    public static async Task TestLiteralWildcards()
+    {
+        var factory = new TestDbContextFactory();
+        using var context = factory.CreateDbContext();
+        context.MediaFiles.Add(Song("p1", "100% Pure", "A"));
+        context.MediaFiles.Add(Song("p2", "100 Pure", "B"));
+        context.MediaFiles.Add(Song("p3", "Snake_Case", "C"));
+        context.MediaFiles.Add(Song("p4", "SnakeXCase", "D"));
+        await context.SaveChangesAsync();
+
+        var engine = new SearchEngine(factory);
+        var percent = await engine.SearchAsync("100%");
+        var underscore = await engine.SearchAsync("Snake_");
+        if (percent.Count != 1 || percent[0].Id != "p1" || underscore.Count != 1 || underscore[0].Id != "p3")
+            throw new Exception($"Literal % / _ search: got {percent.Count} and {underscore.Count} results");
+
+        Console.WriteLine("✓ TestLiteralWildcards passed");
+    }
+
     public static async Task RunAllTests()
     {
         Console.WriteLine("Running SearchEngine tests...\n");
@@ -328,6 +376,8 @@ public class SearchEngineTest
             await TestSearchHistoryDuplicates();
             await TestClearHistory();
             await TestRelevanceRanking();
+            await TestExactMatchBeyondLimit();
+            await TestLiteralWildcards();
 
             Console.WriteLine("\n✓ All SearchEngine tests passed!");
         }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,6 +12,9 @@ namespace KaraokePlayer.Services;
 /// </summary>
 public class SearchEngine : ISearchEngine
 {
+    /// <summary>Results returned at most (a huge list is of no use in the catalog).</summary>
+    private const int MaxResults = 1000;
+
     private readonly IDbContextFactory _dbContextFactory;
     private readonly PerformanceMonitor? _performanceMonitor;
     private const int MaxHistoryItems = 10;
@@ -37,23 +40,45 @@ public class SearchEngine : ISearchEngine
         }
 
         var searchTerm = query.Trim();
-        var searchPattern = $"%{searchTerm}%";
+
+        // % and _ typed by the user are literal characters, not LIKE wildcards
+        var escaped = searchTerm.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+        var prefixPattern = $"{escaped}%";
+        var containsPattern = $"%{escaped}%";
 
         using var context = _dbContextFactory.CreateDbContext();
 
-        // Query with LIKE for partial matching on artist, title, and filename
-        // Use AsNoTracking for better performance on read-only queries
-        // Use composite index on Artist + Title for faster searches
-        var results = await context.MediaFiles
-            .AsNoTracking() // Performance: No change tracking needed for search results
+        // The result list is limited, so the best matches are fetched first: names
+        // that start with the text (exact matches included), then the other matches.
+        // Otherwise, with thousands of matches, an exact title could be cut off.
+        var prefixMatches = await context.MediaFiles
+            .AsNoTracking()
             .Include(m => m.Metadata)
             .Where(m =>
-                EF.Functions.Like(m.Filename, searchPattern) ||
-                (m.Metadata != null && EF.Functions.Like(m.Metadata.Artist, searchPattern)) ||
-                (m.Metadata != null && EF.Functions.Like(m.Metadata.Title, searchPattern))
-            )
-            .Take(1000) // Limit results to prevent memory issues with large libraries
+                EF.Functions.Like(m.Filename, prefixPattern, "\\") ||
+                (m.Metadata != null && EF.Functions.Like(m.Metadata.Artist, prefixPattern, "\\")) ||
+                (m.Metadata != null && EF.Functions.Like(m.Metadata.Title, prefixPattern, "\\")))
+            .Take(MaxResults)
             .ToListAsync();
+
+        var results = prefixMatches;
+        if (prefixMatches.Count < MaxResults)
+        {
+            var prefixIds = prefixMatches.Select(m => m.Id).ToHashSet();
+            var otherMatches = await context.MediaFiles
+                .AsNoTracking()
+                .Include(m => m.Metadata)
+                .Where(m =>
+                    EF.Functions.Like(m.Filename, containsPattern, "\\") ||
+                    (m.Metadata != null && EF.Functions.Like(m.Metadata.Artist, containsPattern, "\\")) ||
+                    (m.Metadata != null && EF.Functions.Like(m.Metadata.Title, containsPattern, "\\")))
+                .Take(MaxResults + prefixMatches.Count)
+                .ToListAsync();
+            results = prefixMatches
+                .Concat(otherMatches.Where(m => !prefixIds.Contains(m.Id)))
+                .Take(MaxResults)
+                .ToList();
+        }
 
         // Rank results by relevance
         var rankedResults = RankSearchResults(results, searchTerm);

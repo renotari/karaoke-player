@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
@@ -12,7 +12,8 @@ namespace KaraokePlayer.Models;
 public class DbContextFactory : IDbContextFactory
 {
     private readonly string _connectionString;
-    private static bool _databaseInitialized = false;
+    // Per database: a second factory for another file must initialize that file too
+    private static readonly System.Collections.Generic.HashSet<string> _initializedDatabases = new();
     private static readonly object _initLock = new object();
 
     /// <summary>
@@ -39,16 +40,13 @@ public class DbContextFactory : IDbContextFactory
         var context = new KaraokeDbContext(optionsBuilder.Options);
 
         // Ensure database is initialized only once (thread-safe)
-        if (!_databaseInitialized)
+        lock (_initLock)
         {
-            lock (_initLock)
+            if (!_initializedDatabases.Contains(_connectionString))
             {
-                if (!_databaseInitialized)
-                {
-                    context.Database.EnsureCreated();
-                    InitializeDatabaseSettings(context);
-                    _databaseInitialized = true;
-                }
+                context.Database.EnsureCreated();
+                InitializeDatabaseSettings(context);
+                _initializedDatabases.Add(_connectionString);
             }
         }
 
