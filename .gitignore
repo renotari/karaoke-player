@@ -82,3 +82,7 @@ publish/
 *.cer
 *.crt
 *.key
+
+# Code review reports: kept locally, not committed
+# (name: YYYY-MM-DD_<short hash reviewed>_<reviewer>-review.md)
+docs/reviews/

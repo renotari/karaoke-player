@@ -98,6 +98,10 @@ Settings and the session playlist are written to a temporary file and then repla
 - `ErrorHandlingService` is only used to clear error states at startup.
 - The Playlist Composer drag-and-drop uses Avalonia's legacy `DataObject` API (warnings suppressed in that file).
 
+## Code reviews
+
+Review reports go in `docs/reviews/` (ignored by git: they describe one moment of the code). Name them `YYYY-MM-DD_<short hash reviewed>_<reviewer>-review.md`, e.g. `2026-11-09_5d7cbc1_codex-review.md`, so it is clear which revision they refer to. Commits that fix findings cite the report and finding numbers.
+
 ## Installer and Deployment
 
 `Setup.iss` (Inno Setup) packages `bin\Release\net10.0\win-x64\publish\` (self-contained: no .NET runtime needed on the target PC). When bumping the version update `KaraokePlayer.csproj`, `Setup.iss` and `README.md`. See `docs/DEPLOYMENT.md`.
