@@ -142,6 +142,23 @@ public static class RunUnitTests
             }
             totalTests++;
 
+            // Test 8: Volume and mute
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("TEST 8: Volume - Mute and Settings");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            try
+            {
+                await VolumeTest.RunTests();
+                passedTests++;
+                Console.WriteLine("✓ Volume tests PASSED\n");
+            }
+            catch (Exception ex)
+            {
+                failedTests++;
+                Console.WriteLine($"✗ Volume tests FAILED: {ex.Message}\n");
+            }
+            totalTests++;
+
             // Summary
             Console.WriteLine();
             Console.WriteLine("╔════════════════════════════════════════════════════════════╗");

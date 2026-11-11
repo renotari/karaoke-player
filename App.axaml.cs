@@ -631,12 +631,7 @@ public partial class App : Application
         {
             if (_mainWindowViewModel != null)
             {
-                // Only a real change: re-applying the same value would unmute
-                var volume = (int)Math.Round(Math.Clamp(settings.Volume, 0, 1) * 100);
-                if (volume != _mainWindowViewModel.VolumeToRemember)
-                    _mainWindowViewModel.Volume = volume;
-                else if (!_mainWindowViewModel.IsMuted)
-                    _mediaPlayerController?.SetVolume(volume / 100f); // same value: no change event
+                _mainWindowViewModel.ApplyVolumeSetting((int)Math.Round(Math.Clamp(settings.Volume, 0, 1) * 100));
                 _mainWindowViewModel.AutoPlayEnabled = settings.AutoPlayEnabled;
                 _mainWindowViewModel.ShuffleModeEnabled = settings.ShuffleMode;
                 _mainWindowViewModel.CrossfadeEnabled = settings.CrossfadeEnabled;

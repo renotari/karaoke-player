@@ -103,7 +103,12 @@ Settings and the session playlist are written to a temporary file and then repla
 
 ## Code reviews
 
-Review reports go in `docs/reviews/` (ignored by git: they describe one moment of the code). Name them `YYYY-MM-DD_<short hash reviewed>_<reviewer>-review.md`, e.g. `2026-11-09_5d7cbc1_codex-review.md`, so it is clear which revision they refer to. Commits that fix findings cite the report and finding numbers.
+Codex (`codex` CLI, logged in with the user's ChatGPT account) is the code reviewer. After committing a feature or a fix (not for documentation-only commits), Claude runs it on that commit and handles the findings:
+
+1. `codex review --commit <sha>` (or `--base master` for a whole branch, `--uncommitted` before committing). It takes a few minutes: run it in the background. The output is the whole Codex session; the review is the part after the last line that is just `codex`.
+2. Save that part in `docs/reviews/` (ignored by git: reports describe one moment of the code) as `YYYY-MM-DD_<short hash reviewed>_<reviewer>-review.md`, e.g. `2026-11-11_30a0d1b_codex-review.md`, with the date, command and commit title on top.
+3. Check every finding against the code before acting: fix what is real (with a test when the logic can be tested without the GUI), explain to the user what was not fixed and why. Commits that fix findings cite the report and finding numbers/priorities.
+4. Re-run the review on the fix commit when the fix is not trivial.
 
 ## Installer and Deployment
 

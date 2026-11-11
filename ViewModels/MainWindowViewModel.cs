@@ -311,6 +311,26 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// </summary>
     public int VolumeToRemember => IsMuted ? _volumeBeforeMute : Volume;
 
+    /// <summary>
+    /// The volume from the settings (startup, Settings dialog). The same level
+    /// as now changes nothing (other settings were applied: stay muted); a new
+    /// level ends the mute and is applied even when the slider already shows it
+    /// (muted at 0 and the Settings set 0: no change event would run).
+    /// </summary>
+    public void ApplyVolumeSetting(int volume)
+    {
+        if (volume == VolumeToRemember)
+        {
+            if (!IsMuted)
+                _mediaPlayerController?.SetVolume(volume / 100f); // startup: no change event
+            return;
+        }
+
+        IsMuted = false;
+        Volume = volume;
+        _mediaPlayerController?.SetVolume(volume / 100f);
+    }
+
     // Collections
     public ObservableCollection<MediaFile> MediaFiles { get; }
     /// <summary>
