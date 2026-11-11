@@ -26,7 +26,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        
+        SetupPlaylistDragAndDrop();
+
         // Video: hand the two native windows to the player controller once they exist
         foreach (var name in new[] { "VideoViewA", "VideoViewB" })
         {

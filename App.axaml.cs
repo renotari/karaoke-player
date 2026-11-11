@@ -248,6 +248,14 @@ public partial class App : Application
             case nameof(MainWindowViewModel.IsFullscreen):
                 ApplyFullscreen();
                 break;
+            case nameof(MainWindowViewModel.Volume):
+            case nameof(MainWindowViewModel.IsMuted):
+                // Keep the settings in memory in step with the slider, so the
+                // Settings dialog shows it and applying other settings does not
+                // bring back an old volume (saved to disk with the next save / on exit)
+                if (_settingsManager != null && _mainWindowViewModel != null)
+                    _settingsManager.GetSettings().Volume = _mainWindowViewModel.VolumeToRemember / 100.0;
+                break;
         }
     }
 
@@ -623,7 +631,12 @@ public partial class App : Application
         {
             if (_mainWindowViewModel != null)
             {
-                _mainWindowViewModel.Volume = (int)Math.Round(Math.Clamp(settings.Volume, 0, 1) * 100);
+                // Only a real change: re-applying the same value would unmute
+                var volume = (int)Math.Round(Math.Clamp(settings.Volume, 0, 1) * 100);
+                if (volume != _mainWindowViewModel.VolumeToRemember)
+                    _mainWindowViewModel.Volume = volume;
+                else if (!_mainWindowViewModel.IsMuted)
+                    _mediaPlayerController?.SetVolume(volume / 100f); // same value: no change event
                 _mainWindowViewModel.AutoPlayEnabled = settings.AutoPlayEnabled;
                 _mainWindowViewModel.ShuffleModeEnabled = settings.ShuffleMode;
                 _mainWindowViewModel.CrossfadeEnabled = settings.CrossfadeEnabled;
@@ -776,7 +789,7 @@ public partial class App : Application
             if (_settingsManager != null && _mainWindowViewModel != null)
             {
                 var settings = _settingsManager.GetSettings();
-                settings.Volume = _mainWindowViewModel.Volume / 100.0;
+                settings.Volume = _mainWindowViewModel.VolumeToRemember / 100.0;
                 SaveWindowLayout(settings);
                 Task.Run(() => _settingsManager.SaveSettingsAsync()).Wait(TimeSpan.FromSeconds(5));
             }

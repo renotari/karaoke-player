@@ -80,6 +80,9 @@ Karaoke queue: `CurrentPlaylist[0]` is the song playing (while `CurrentSong != n
 ### Views
 
 - `MainWindow`: catalog, video area, playlist; Video Mode hides the side columns; in dual screen the center shows a panel instead of the video.
+- Current playlist reordering by drag and drop: `Views/MainWindow.PlaylistDrag.cs` (the song playing stays on top; handle `DragEnter` as well as `DragOver`: on Linux only `DragEnter` is raised when moving onto another item). Songs may be queued more than once on purpose (the DJ decides): no duplicate warning.
+- Playback bar icons are vector `PathIcon`s (`Icon*` geometries in `MainWindow.axaml` resources), not emoji glyphs.
+- Volume: the slider is the source of truth; `App` copies `VolumeToRemember` (the level before muting while muted) into the in-memory settings on every change, so the Settings dialog shows it and re-applying settings does not restore an old value.
 - `PlaybackWindow`: dual-screen audience window, bound to the same `MainWindowViewModel`.
 - `SettingsWindow` (`SettingsViewModel` gets the dialog as owner), `PlaylistComposerWindow` (its ViewModel needs `SetWindow`), `WelcomeDialog` (first run).
 - Time values are seconds (`double`): format them with `SecondsToTimeConverter`, not `StringFormat`.

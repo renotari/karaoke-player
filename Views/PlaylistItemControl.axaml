@@ -24,10 +24,6 @@
             <Setter Property="Background" Value="#3D1F1F"/>
         </Style>
         
-        <Style Selector="Border.playlist-item.duplicate">
-            <Setter Property="Background" Value="#3D3D1F"/>
-        </Style>
-        
         <Style Selector="TextBlock.title">
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="13"/>
@@ -50,11 +46,6 @@
             <Setter Property="FontWeight" Value="Bold"/>
         </Style>
         
-        <Style Selector="TextBlock.duplicate-icon">
-            <Setter Property="Foreground" Value="#FFA500"/>
-            <Setter Property="FontSize" Value="14"/>
-        </Style>
-        
         <Style Selector="TextBlock.playing-icon">
             <Setter Property="Foreground" Value="#00FF00"/>
             <Setter Property="FontSize" Value="14"/>
@@ -64,7 +55,6 @@
     <Border Classes="playlist-item"
             Classes.playing="{Binding IsPlaying}"
             Classes.error="{Binding HasError}"
-            Classes.duplicate="{Binding IsDuplicate}"
             ToolTip.Tip="{Binding ErrorTooltip}"
             ToolTip.ShowDelay="500">
         
@@ -118,12 +108,6 @@
                 <TextBlock Classes="playing-icon"
                            Text="▶"
                            IsVisible="{Binding IsPlaying}"/>
-                
-                <!-- Duplicate indicator -->
-                <TextBlock Classes="duplicate-icon"
-                           Text="⚠"
-                           IsVisible="{Binding IsDuplicate}"
-                           ToolTip.Tip="This song is already in the playlist"/>
                 
                 <!-- Error indicator -->
                 <TextBlock Classes="error-icon"

@@ -295,7 +295,21 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     partial void OnVolumeChanged(int value)
     {
         _mediaPlayerController?.SetVolume(value / 100f);
+        if (IsMuted && value > 0)
+            IsMuted = false; // the slider was moved while muted
+        OnPropertyChanged(nameof(IsSilent));
     }
+
+    partial void OnIsMutedChanged(bool value) => OnPropertyChanged(nameof(IsSilent));
+
+    /// <summary>Muted or volume at 0: the mute button shows the crossed speaker.</summary>
+    public bool IsSilent => IsMuted || Volume == 0;
+
+    /// <summary>
+    /// The volume to keep in the settings: while muted, the level before muting
+    /// (so muting is not saved as volume 0).
+    /// </summary>
+    public int VolumeToRemember => IsMuted ? _volumeBeforeMute : Volume;
 
     // Collections
     public ObservableCollection<MediaFile> MediaFiles { get; }
@@ -420,7 +434,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>When false, playback stops at the end of each song (setting AutoPlayEnabled).</summary>
     public bool AutoPlayEnabled { get; set; } = true;
 
-    private bool IsSongLoaded => CurrentSong != null;
+    public bool IsSongLoaded => CurrentSong != null;
 
     private async Task AddToPlaylist(MediaFile? mediaFile, string position)
     {
@@ -545,6 +559,27 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         await _playlistManager.ReorderSongAsync(index, index + 1);
     }
+
+    /// <summary>
+    /// Drag and drop in the playlist: moves the song so that it ends up before
+    /// the song now at <paramref name="insertBefore"/> (Count = at the end).
+    /// The song playing stays on top and cannot be moved.
+    /// </summary>
+    public async Task MovePlaylistItemAsync(PlaylistItemViewModel item, int insertBefore)
+    {
+        var from = CurrentPlaylist.IndexOf(item);
+        var first = IsSongLoaded ? 1 : 0;
+        if (_playlistManager == null || from < first)
+            return;
+
+        var to = Math.Clamp(insertBefore > from ? insertBefore - 1 : insertBefore, first, CurrentPlaylist.Count - 1);
+        if (to != from)
+            await _playlistManager.ReorderSongAsync(from, to);
+    }
+
+    /// <summary>Whether the playlist item can be dragged (not the song playing).</summary>
+    public bool CanMovePlaylistItem(PlaylistItemViewModel item) =>
+        CurrentPlaylist.IndexOf(item) >= (IsSongLoaded ? 1 : 0);
 
     // CanExecute methods for commands
     private bool CanClearPlaylist() => CurrentPlaylist.Count > (IsSongLoaded ? 1 : 0);
@@ -1166,23 +1201,25 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         Volume = Math.Max(0, Volume - 5);
     }
 
+    [ObservableProperty]
     private bool _isMuted;
-    private int _volumeBeforeMute;
+
+    private int _volumeBeforeMute = 75;
 
     [RelayCommand]
     public void ToggleMute()
     {
-        if (_isMuted)
+        if (IsMuted)
         {
-            Volume = _volumeBeforeMute;
-            _isMuted = false;
+            IsMuted = false;
+            Volume = _volumeBeforeMute > 0 ? _volumeBeforeMute : 75;
             StatusMessage = "Unmuted";
         }
         else
         {
             _volumeBeforeMute = Volume;
+            IsMuted = true;
             Volume = 0;
-            _isMuted = true;
             StatusMessage = "Muted";
         }
     }
