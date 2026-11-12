@@ -113,6 +113,13 @@ public partial class YouTubeViewModel : ViewModelBase
         await _main.DownloadFromYouTubeAsync(result.Video);
     }
 
+    /// <summary>The main ViewModel (queue summary and Clear queue state).</summary>
+    public MainWindowViewModel? Main => _main;
+
+    /// <summary>Cancels the downloads waiting for their turn (the one in progress goes on).</summary>
+    [RelayCommand]
+    private void ClearDownloadQueue() => _main?.ClearDownloadQueue();
+
     /// <summary>Removes the finished, failed and cancelled downloads from the list.</summary>
     [RelayCommand]
     private void ClearFinishedDownloads() => _main?.ClearFinishedDownloads();
@@ -175,7 +182,7 @@ public partial class YouTubeDownloadViewModel : ObservableObject
     public CancellationToken Token => _cancellation.Token;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsActive), nameof(IsFinished))]
+    [NotifyPropertyChangedFor(nameof(IsActive), nameof(IsFinished), nameof(IsDownloading))]
     [NotifyCanExecuteChangedFor(nameof(CancelCommand))]
     private YouTubeDownloadState _state = YouTubeDownloadState.Queued;
 
@@ -187,17 +194,50 @@ public partial class YouTubeDownloadViewModel : ObservableObject
     private bool _isIndeterminate = true;
 
     [ObservableProperty]
-    private string _statusText = "Waiting...";
+    private string _statusText = "Waiting in queue";
 
     public bool IsActive => State is YouTubeDownloadState.Queued or YouTubeDownloadState.Downloading;
     public bool IsFinished => !IsActive;
 
+    /// <summary>Its turn has come (the progress bar is shown).</summary>
+    public bool IsDownloading => State == YouTubeDownloadState.Downloading;
+
+    /// <summary>Cancelled while still waiting (it leaves the list).</summary>
+    public bool WasQueuedWhenCancelled { get; private set; }
+
     [RelayCommand(CanExecute = nameof(IsActive))]
-    private void Cancel() => _cancellation.Cancel();
+    private void Cancel()
+    {
+        WasQueuedWhenCancelled = State == YouTubeDownloadState.Queued;
+        _cancellation.Cancel();
+    }
+
+    /// <summary>Its turn: the download starts.</summary>
+    public void Start()
+    {
+        State = YouTubeDownloadState.Downloading;
+        StatusText = "Preparing...";
+    }
+
+    public void SetQueuePosition(int position)
+    {
+        if (State == YouTubeDownloadState.Queued)
+            StatusText = $"Waiting in queue ({Ordinal(position)})";
+    }
+
+    private static string Ordinal(int n) => n + ((n % 100) is 11 or 12 or 13 ? "th" : (n % 10) switch
+    {
+        1 => "st",
+        2 => "nd",
+        3 => "rd",
+        _ => "th"
+    });
 
     public void Report(YouTubeDownloadProgress progress)
     {
-        State = YouTubeDownloadState.Downloading;
+        // Progress is posted: a late report must not revive a finished download
+        if (State != YouTubeDownloadState.Downloading)
+            return;
         IsIndeterminate = progress.Percent == null;
         if (progress.Percent is { } percent)
         {

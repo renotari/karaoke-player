@@ -176,6 +176,23 @@ public static class RunUnitTests
             }
             totalTests++;
 
+            // Test 10: YouTube download queue
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("TEST 10: Download Queue - Order and Clear Queue");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            try
+            {
+                await DownloadQueueTest.RunTests();
+                passedTests++;
+                Console.WriteLine("✓ DownloadQueue tests PASSED\n");
+            }
+            catch (Exception ex)
+            {
+                failedTests++;
+                Console.WriteLine($"✗ DownloadQueue tests FAILED: {ex.Message}\n");
+            }
+            totalTests++;
+
             // Summary
             Console.WriteLine();
             Console.WriteLine("╔════════════════════════════════════════════════════════════╗");

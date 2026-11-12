@@ -76,9 +76,17 @@
     </ListBox>
 
     <!-- Downloads -->
-    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,12,0,4">
+    <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,12,0,4">
       <TextBlock Text="Downloads" FontWeight="Bold" VerticalAlignment="Center"/>
-      <Button Grid.Column="1" Content="Clear finished" Command="{Binding ClearFinishedDownloadsCommand}"/>
+      <TextBlock Grid.Column="1" Text="{Binding Main.DownloadQueueSummary, StringFormat='({0})', FallbackValue=''}"
+                 IsVisible="{Binding Main.DownloadQueueSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}"
+                 Margin="8,0,0,0" VerticalAlignment="Center" FontSize="12"
+                 Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+      <Button Grid.Column="2" Content="Clear queue" Margin="0,0,8,0"
+              ToolTip.Tip="Cancel the downloads waiting for their turn (the one in progress goes on)"
+              IsEnabled="{Binding Main.HasQueuedDownloads, FallbackValue=False}"
+              Command="{Binding ClearDownloadQueueCommand}"/>
+      <Button Grid.Column="3" Content="Clear finished" Command="{Binding ClearFinishedDownloadsCommand}"/>
     </Grid>
     <ListBox Grid.Row="4" ItemsSource="{Binding Downloads}" Height="150"
              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -92,7 +100,7 @@
             </StackPanel>
             <ProgressBar Grid.Column="1" Minimum="0" Maximum="100" VerticalAlignment="Center"
                          Value="{Binding Percent}" IsIndeterminate="{Binding IsIndeterminate}"
-                         IsVisible="{Binding IsActive}"/>
+                         IsVisible="{Binding IsDownloading}"/>
             <Button Grid.Column="2" Content="Cancel" Margin="8,0,0,0"
                     IsVisible="{Binding IsActive}" Command="{Binding CancelCommand}"/>
           </Grid>
