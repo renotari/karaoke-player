@@ -24,7 +24,7 @@ public class SecondsToTimeConverter : IValueConverter
         });
     }
 
-    /// <summary>m:ss, or h:mm:ss from one hour up (negative and NaN count as 0).</summary>
+    /// <summary>m:ss, or h:mm:ss from one hour up (hours not wrapped at 24; negative and NaN count as 0).</summary>
     public static string Format(double seconds)
     {
         if (double.IsNaN(seconds) || seconds < 0)
@@ -32,7 +32,7 @@ public class SecondsToTimeConverter : IValueConverter
 
         var time = TimeSpan.FromSeconds(Math.Floor(seconds));
         return time.TotalHours >= 1
-            ? time.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture)
+            ? $"{(long)time.TotalHours}:{time.ToString(@"mm\:ss", CultureInfo.InvariantCulture)}"
             : time.ToString(@"m\:ss", CultureInfo.InvariantCulture);
     }
 

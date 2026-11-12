@@ -30,6 +30,9 @@ public static class PlaylistDurationTest
         Check(idle.Total == 200 + 180 + 3600 && idle.Remaining == idle.Total, "idle: the first song is still all to play");
         Check(idle.Format(false, 4) == "Total 1:06:20 · 1 without length", "idle: no remaining time shown");
 
+        Check(KaraokePlayer.ViewModels.SecondsToTimeConverter.Format(25 * 3600 + 61) == "25:01:01",
+            "25 hours are not shown as 1 hour");
+
         var past = PlaylistDuration.Compute(new double?[] { 100 }, true, 130, 0);
         Check(past.Remaining == 0, "position past the tag length: remaining never negative");
         Check(PlaylistDuration.Compute(Array.Empty<double?>(), false, 0, 0).Format(false, 0) == string.Empty,

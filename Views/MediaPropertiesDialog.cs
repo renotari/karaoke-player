@@ -18,12 +18,15 @@ public static class MediaPropertiesDialog
     public static async Task ShowAsync(Window owner, MediaFile file)
     {
         // A stat of a file on a network drive can be slow: not on the UI thread
-        var info = await Task.Run(() =>
+        // (FileInfo reads the disk on first use, so the rows are built there too)
+        var folder = Path.GetDirectoryName(file.FilePath);
+        var (rows, folderExists) = await Task.Run(() =>
         {
-            try { return new FileInfo(file.FilePath); }
-            catch { return null; }
+            FileInfo? info = null;
+            try { info = new FileInfo(file.FilePath); info.Refresh(); }
+            catch { info = null; }
+            return (MediaProperties.Build(file, info), folder != null && Directory.Exists(folder));
         });
-        var rows = MediaProperties.Build(file, info);
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         for (var i = 0; i < rows.Count; i++)
@@ -62,8 +65,7 @@ public static class MediaPropertiesDialog
         var openFolder = new Button { Content = "Open Folder", MinWidth = 100 };
         var close = new Button { Content = "Close", MinWidth = 90, IsDefault = true, IsCancel = true };
         close.Click += (_, _) => dialog.Close();
-        var folder = Path.GetDirectoryName(file.FilePath);
-        openFolder.IsEnabled = folder != null && Directory.Exists(folder);
+        openFolder.IsEnabled = folderExists;
         openFolder.Click += async (_, _) =>
         {
             try { await dialog.Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folder!)); }
