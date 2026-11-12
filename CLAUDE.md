@@ -86,6 +86,7 @@ Karaoke queue: `CurrentPlaylist[0]` is the song playing (while `CurrentSong != n
 - `PlaybackWindow`: dual-screen audience window, bound to the same `MainWindowViewModel`.
 - `SettingsWindow` (`SettingsViewModel` gets the dialog as owner), `PlaylistComposerWindow` (its ViewModel needs `SetWindow`), `WelcomeDialog` (first run).
 - Time values are seconds (`double`): format them with `SecondsToTimeConverter`, not `StringFormat`.
+- Catalog/playlist context menu "Properties...": `Views/MediaPropertiesDialog` (rows built by `Services/MediaProperties`). The playlist header shows total/remaining time (`Services/PlaylistDuration`, updated on list, metadata and position changes). "Edit..." opens the Playlist Composer with the queue (the song playing stays out: "Save & Load for Play" keeps it on top).
 - Confirmations and error messages: `Views/MessageDialog` (`ConfirmAsync`, `ShowAsync`); a WinExe has no console, so `Console.WriteLine` is not a way to tell the user.
 - M3U files: `Services/PlaylistFile` (relative paths, matching by exact path or a unique file name, safe playlist file names), used by both `PlaylistManager` and the Playlist Composer.
 

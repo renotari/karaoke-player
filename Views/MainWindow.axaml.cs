@@ -16,6 +16,7 @@ public partial class MainWindow : Window
 {
     private TextBox? _searchTextBox;
     private IDisposable? _playlistComposerSubscription;
+    private IDisposable? _propertiesSubscription;
     private IDisposable? _settingsSubscription;
     private IDisposable? _openMediaDirectorySubscription;
     private IDisposable? _showAboutSubscription;
@@ -41,7 +42,14 @@ public partial class MainWindow : Window
         
         // Subscribe to window opening messages
         _playlistComposerSubscription = MessageBus.Current.Listen<OpenPlaylistComposerMessage>()
-            .Subscribe(async _ => await OpenPlaylistComposerAsync());
+            .Subscribe(async message => await OpenPlaylistComposerAsync(message.WithCurrentQueue));
+
+        _propertiesSubscription = MessageBus.Current.Listen<ShowMediaPropertiesMessage>()
+            .Subscribe(message => Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+            {
+                try { await MediaPropertiesDialog.ShowAsync(this, message.File); }
+                catch (Exception ex) { ReportError("Cannot show the properties", ex.Message, ex); }
+            }));
 
         _settingsSubscription = MessageBus.Current.Listen<Services.OpenSettingsMessage>()
             .Subscribe(async _ => await OpenSettingsAsync());
@@ -62,7 +70,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// Opens the Playlist Composer window
     /// </summary>
-    public async Task OpenPlaylistComposerAsync()
+    public async Task OpenPlaylistComposerAsync(bool withCurrentQueue = false)
     {
         try
         {
@@ -97,6 +105,8 @@ public partial class MainWindow : Window
                 };
                 // Needed for Close and for the M3U file pickers
                 playlistComposerViewModel.SetWindow(playlistComposer);
+                if (withCurrentQueue)
+                    playlistComposerViewModel.SetComposition(viewModel.GetQueuedSongs());
 
                 await playlistComposer.ShowDialog(this);
             });
@@ -468,6 +478,7 @@ public partial class MainWindow : Window
     {
         // Cleanup subscriptions
         _playlistComposerSubscription?.Dispose();
+        _propertiesSubscription?.Dispose();
         _settingsSubscription?.Dispose();
         _openMediaDirectorySubscription?.Dispose();
         _showAboutSubscription?.Dispose();

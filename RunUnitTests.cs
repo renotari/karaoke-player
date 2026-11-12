@@ -159,6 +159,23 @@ public static class RunUnitTests
             }
             totalTests++;
 
+            // Test 9: Playlist length and file properties
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("TEST 9: Playlist Duration - Total, Remaining and Properties");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            try
+            {
+                await PlaylistDurationTest.RunTests();
+                passedTests++;
+                Console.WriteLine("✓ PlaylistDuration tests PASSED\n");
+            }
+            catch (Exception ex)
+            {
+                failedTests++;
+                Console.WriteLine($"✗ PlaylistDuration tests FAILED: {ex.Message}\n");
+            }
+            totalTests++;
+
             // Summary
             Console.WriteLine();
             Console.WriteLine("╔════════════════════════════════════════════════════════════╗");

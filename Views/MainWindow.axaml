@@ -127,6 +127,7 @@
                 <MenuItem Header="Download from _YouTube..." Command="{Binding OpenYouTubeCommand}" InputGesture="Ctrl+T" />
                 <Separator />
                 <MenuItem Header="Playlist _Composer..." Command="{Binding OpenPlaylistComposerCommand}" InputGesture="Ctrl+P" />
+                <MenuItem Header="_Edit Current Playlist..." Command="{Binding EditPlaylistInComposerCommand}" />
                 <Separator />
                 <MenuItem Header="_Exit" Command="{Binding ExitCommand}" />
             </MenuItem>
@@ -258,6 +259,10 @@
                                                       CommandParameter="{Binding}"/>
                                             <MenuItem Header="Add to Playlist (End)" 
                                                       Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).AddToPlaylistEndCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                            <Separator/>
+                                            <MenuItem Header="Properties..."
+                                                      Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).ShowPropertiesCommand}"
                                                       CommandParameter="{Binding}"/>
                                         </ContextMenu>
                                     </Grid.ContextMenu>
@@ -429,6 +434,7 @@
                                          Margin="0,0,0,8"/>
                                 <TextBlock Grid.Row="1" Grid.Column="2"
                                            Text="{Binding CurrentPlaylist.Count, StringFormat='Playlist ({0})'}"
+                                           ToolTip.Tip="{Binding PlaylistSummary}"
                                            Foreground="White" VerticalAlignment="Center" Margin="0,0,0,8"/>
 
                                 <!-- Results -->
@@ -498,13 +504,22 @@
                     Padding="8">
                 <Grid RowDefinitions="Auto,*,Auto">
                     
-                    <!-- Playlist Header -->
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-                        <TextBlock Text="Current Playlist"
-                                   FontWeight="Bold"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding CurrentPlaylist.Count, StringFormat=' ({0})'}"
-                                   VerticalAlignment="Center"
+                    <!-- Playlist Header: count, total and remaining time -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Current Playlist"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding CurrentPlaylist.Count, StringFormat=' ({0})'}"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding PlaylistSummary}"
+                                   ToolTip.Tip="{Binding PlaylistEndTime}"
+                                   IsVisible="{Binding PlaylistSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Background="Transparent"
                                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
                     </StackPanel>
 
@@ -519,7 +534,7 @@
                              IsTabStop="True">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Grid ColumnDefinitions="Auto,80,*,Auto" 
+                                <Grid ColumnDefinitions="Auto,80,*,Auto,Auto" 
                                       Margin="4"
                                       Background="Transparent">
 
@@ -542,6 +557,10 @@
                                             <MenuItem Header="Remove"
                                                       Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).RemoveSongCommand}"
                                                       CommandParameter="{Binding}"/>
+                                            <Separator/>
+                                            <MenuItem Header="Properties..."
+                                                      Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).ShowPropertiesCommand}"
+                                                      CommandParameter="{Binding MediaFile}"/>
                                         </ContextMenu>
                                     </Grid.ContextMenu>
 
@@ -603,8 +622,17 @@
                                         </StackPanel>
                                     </StackPanel>
 
+                                    <!-- Length (empty until the metadata is read) -->
+                                    <TextBlock Grid.Column="3"
+                                               Margin="6,0,0,0"
+                                               VerticalAlignment="Center"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                               Text="{Binding MediaFile.Metadata.Duration, Converter={StaticResource SecondsToTime}, FallbackValue=''}"
+                                               IsVisible="{Binding MediaFile.MetadataLoaded}"/>
+
                                     <!-- Remove Button -->
-                                    <Button Grid.Column="3"
+                                    <Button Grid.Column="4"
                                             Content="✕"
                                             Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).RemoveSongCommand}"
                                             CommandParameter="{Binding}"
@@ -630,6 +658,10 @@
                                 Command="{Binding ShufflePlaylistCommand}"
                                 ToolTip.Tip="Shuffle playlist order"
                                 TabIndex="5"/>
+                        <Button Content="Edit..."
+                                Command="{Binding EditPlaylistInComposerCommand}"
+                                ToolTip.Tip="Open the queue in the Playlist Composer (the song playing keeps playing)"
+                                TabIndex="6"/>
                     </StackPanel>
                 </Grid>
             </Border>

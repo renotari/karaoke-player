@@ -150,6 +150,14 @@ public partial class PlaylistComposerViewModel : ViewModelBase, IDisposable
         _window = window;
     }
 
+    /// <summary>Starts from these songs (the current queue) instead of an empty composition.</summary>
+    public void SetComposition(IEnumerable<MediaFile> songs)
+    {
+        ComposedPlaylist.Clear();
+        foreach (var song in songs)
+            ComposedPlaylist.Add(song);
+    }
+
     /// <summary>
     /// Loads the media catalog from the library manager
     /// </summary>

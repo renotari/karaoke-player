@@ -936,6 +936,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             CurrentPlaylist[i].IsCurrentlyPlaying =
                 i == 0 && CurrentSong != null && CurrentPlaylist[i].MediaFile?.Id == CurrentSong.Id;
         }
+        UpdatePlaylistSummary();
     }
 
     // Event handlers for service events
@@ -974,6 +975,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         CurrentTime = e.CurrentTime;
         Duration = e.Duration;
         _updatingPositionFromPlayer = false;
+        UpdatePlaylistSummary();
     }
 
     private void OnMediaEnded(object? sender, MediaEndedEventArgs e)
@@ -1093,6 +1095,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             UpdateCurrentSongInfo();
         }
+        UpdatePlaylistSummary();
     }
 
     private void SyncPlaylistFromService()
@@ -1117,6 +1120,32 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         RefreshCommandStates();
         OnPropertyChanged(nameof(NextSongInfo));
         OnPropertyChanged(nameof(HasNextSong));
+    }
+
+    /// <summary>"Total 1:02:03 · Remaining 45:10" under the playlist header.</summary>
+    [ObservableProperty]
+    private string _playlistSummary = string.Empty;
+
+    /// <summary>Tooltip of the summary: when the playlist ends at the current pace.</summary>
+    [ObservableProperty]
+    private string _playlistEndTime = string.Empty;
+
+    /// <summary>Called when the list, a duration or the playback position changes.</summary>
+    private void UpdatePlaylistSummary()
+    {
+        var durations = new double?[CurrentPlaylist.Count];
+        for (var i = 0; i < durations.Length; i++)
+            durations[i] = CurrentPlaylist[i].MediaFile?.Metadata?.Duration;
+
+        var playing = CurrentPlaylist.Count > 0 && CurrentPlaylist[0].IsCurrentlyPlaying;
+        var summary = PlaylistDuration.Compute(durations, playing, CurrentTime, Duration);
+        PlaylistSummary = summary.Format(playing, CurrentPlaylist.Count);
+
+        // Minutes are enough for "ends at": it changes once a minute, not on every tick
+        PlaylistEndTime = summary.Remaining > 0
+            ? $"Ends at about {DateTime.Now.AddSeconds(summary.Remaining):HH:mm}"
+                + (summary.UnknownCount > 0 ? $" (plus {summary.UnknownCount} songs of unknown length)" : string.Empty)
+            : string.Empty;
     }
 
     private void UpdateCurrentSongInfo()
@@ -1355,6 +1384,26 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         // Use ReactiveUI MessageBus to request window opening
         ReactiveUI.MessageBus.Current.SendMessage(new OpenPlaylistComposerMessage());
+    }
+
+    /// <summary>Opens the Playlist Composer with the queue (the song playing stays out: it keeps playing).</summary>
+    [RelayCommand]
+    public void EditPlaylistInComposer()
+    {
+        StatusMessage = "Opening the playlist in the Playlist Composer...";
+        ReactiveUI.MessageBus.Current.SendMessage(new OpenPlaylistComposerMessage { WithCurrentQueue = true });
+    }
+
+    /// <summary>The songs waiting in the queue, in order (without the song playing).</summary>
+    public System.Collections.Generic.List<MediaFile> GetQueuedSongs() =>
+        CurrentPlaylist.Skip(IsSongLoaded ? 1 : 0).Select(p => p.MediaFile).Where(f => f != null).ToList();
+
+    /// <summary>Properties dialog of a catalog or playlist song.</summary>
+    [RelayCommand]
+    public void ShowProperties(MediaFile? file)
+    {
+        if (file != null)
+            ReactiveUI.MessageBus.Current.SendMessage(new ShowMediaPropertiesMessage(file));
     }
 
     [RelayCommand]
