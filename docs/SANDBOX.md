@@ -5,6 +5,19 @@ Development happens on a headless Ubuntu machine (`claude-code-sandbox-server`, 
 terminal. The app is tested on Windows; see `CLAUDE.md` for building and running it
 on Linux.
 
+## Finding the sandbox address
+
+The sandbox is a Hyper-V virtual machine on the Windows PC. Its IP address (Default
+Switch network) can change when the PC restarts:
+
+- on the sandbox: `hostname -I`;
+- on Windows, PowerShell as administrator:
+  `Get-VM | Get-VMNetworkAdapter | Select VMName, IPAddresses` (the `172.` address);
+- if `ssh` uses a name, it is defined in `C:\Users\<name>\.ssh\config` (`HostName`).
+
+There is no FTP server: only SSH (port 22) is open, and it also serves **SFTP**, which
+is what FileZilla/WinSCP must use.
+
 ## Copying files from Windows to the sandbox
 
 Use `scp` from a Windows terminal (PowerShell or cmd: OpenSSH is part of Windows 10/11).
