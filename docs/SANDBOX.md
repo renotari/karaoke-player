@@ -22,7 +22,24 @@ scp "D:\Karaoke\Kar\song1.kar" "D:\Karaoke\Kar\song2.kar" renotari@<sandbox>:~/p
 - Quote Windows paths with spaces. Names with accents are kept.
 - The other direction (sandbox → Windows) is the same command with the two sides swapped:
   `scp renotari@<sandbox>:~/progetti/karaoke-player/docs/file.md .`
-- With a graphical client (WinSCP, FileZilla): protocol SFTP, same host, user and key.
+
+## With a graphical client (drag and drop)
+
+**FileZilla** — File → Site Manager → New site:
+
+- Protocol: **SFTP**; Host: the one used for `ssh`; Port: 22 (or empty)
+- Logon type: **Key file**; User: `renotari`
+- Key file: the private key, usually `C:\Users\<name>\.ssh\id_ed25519` (or `id_rsa`);
+  the `.ssh` folder may be hidden in the file picker, paste the path. If FileZilla
+  offers to convert it to `.ppk`, accept and save it next to the original.
+- Connect, accept the server key the first time. Left pane: Windows; right pane:
+  the sandbox. Go to `/home/renotari/progetti/karaoke-player-samples/kar` on the
+  right and drag the files there.
+
+**WinSCP**: same settings (SFTP site, key under Advanced → SSH → Authentication).
+
+**VS Code with Remote - SSH**: if already connected to the sandbox, open the samples
+folder and drag files from Explorer into the VS Code file tree.
 
 ## Where to put them
 
