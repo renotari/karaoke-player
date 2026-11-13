@@ -29,6 +29,8 @@ build-release.bat / build-installer.bat        # Windows: release build / Inno S
 
 Tests are plain runner classes (no xUnit): `Services/*Test.cs`, orchestrated by `TestRunner.cs`, `RunUnitTests.cs`, `IntegrationTests.cs`. Test modes set `KARAOKE_PLAYER_DATA_DIR` to a temporary folder (see `Program.cs`), so they never touch the real user data. Report a failed check with `TestFailures.Fail("✗ ...")` (or throw): the test modes exit with code 1 when any was recorded; a plain `Console.WriteLine` of a failure does not fail the run. In the headless sandbox run `--test` with `KARAOKE_PLAYER_VLC_OPTIONS=--aout=dummy`. The compiler must stay at 0 warnings.
 
+Copying files from Windows to the sandbox (scp) and where sample media go: `docs/SANDBOX.md`.
+
 ### Running the GUI without a display (sandbox)
 
 `xvfb`, `xdotool` and `imagemagick` are installed: run the app on `DISPLAY=:99` (`Xvfb :99 -screen 0 1600x900x24 &`), drive it with `xdotool`, screenshot with `import -window root shot.png`. There is no audio device there: start the app with `KARAOKE_PLAYER_VLC_OPTIONS="--aout=dummy"` or audio visualizations stay black.
