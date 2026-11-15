@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -55,6 +56,13 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
     // Every preload request (and ClearPreload) gets a new version: a request that
     // reaches the lock after a newer one, or after a clear, is dropped
     private long _preloadVersion;
+    private long _playVersion; // a newer Play or a Stop makes a play still preparing stale
+
+    /// <summary>Synthesizes .mid/.kar files to WAV (null: MIDI files cannot be played).</summary>
+    public Midi.MidiRenderer? MidiRenderer { get; set; }
+
+    // MIDI file path -> rendered WAV, filled before the media is created (under _sync, no waiting)
+    private readonly ConcurrentDictionary<string, string> _renderedAudio = new();
     private float _volume = 0.5f;
     private bool _subtitlesEnabled = true;
     private string? _audioDeviceId; // null = system default
@@ -279,12 +287,40 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         if (mediaFile == null)
             throw new ArgumentNullException(nameof(mediaFile));
 
+        var version = Interlocked.Increment(ref _playVersion);
+        if (mediaFile.Type == Models.MediaType.Midi)
+        {
+            // Synthesizing takes a few seconds the first time
+            State = PlaybackState.Buffering;
+            try
+            {
+                await PrepareMidiAsync(mediaFile);
+            }
+            catch (Exception ex)
+            {
+                if (version != Interlocked.Read(ref _playVersion))
+                    return;
+                State = PlaybackState.Error;
+                PlaybackError?.Invoke(this, new PlaybackErrorEventArgs
+                {
+                    ErrorMessage = $"Cannot play the MIDI file: {ex.Message}",
+                    MediaFile = mediaFile,
+                    Exception = ex
+                });
+                return;
+            }
+        }
+
         await Task.Run(() =>
         {
             try
             {
                 lock (_sync)
                 {
+                    // Next or Stop was pressed while the MIDI file was being prepared
+                    if (version != Interlocked.Read(ref _playVersion))
+                        return;
+
                     CancelCrossfade();
 
                     var player = PlayerFor(_active, mediaFile);
@@ -353,6 +389,7 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
 
     public void Stop()
     {
+        Interlocked.Increment(ref _playVersion);
         lock (_sync)
         {
             CancelCrossfade();
@@ -405,16 +442,30 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
         }
     }
 
+    /// <summary>Renders a .mid/.kar to WAV (cached) before its media is created.</summary>
+    private async Task PrepareMidiAsync(MediaFile mediaFile)
+    {
+        var renderer = MidiRenderer ?? throw new InvalidOperationException("MIDI playback is not available");
+        _renderedAudio[mediaFile.FilePath] = await renderer.GetAudioFileAsync(mediaFile.FilePath);
+    }
+
     private Media CreateMedia(MediaFile mediaFile)
     {
-        var media = new Media(_libVLC, mediaFile.FilePath, FromType.FromPath);
+        var path = mediaFile.FilePath;
+        if (mediaFile.Type == Models.MediaType.Midi
+            && !_renderedAudio.TryGetValue(mediaFile.FilePath, out path))
+        {
+            throw new InvalidOperationException("The MIDI file was not prepared");
+        }
+
+        var media = new Media(_libVLC, path!, FromType.FromPath);
 
         if (AudioNormalizationEnabled)
         {
             media.AddOption(":audio-filter=normvol");
         }
 
-        if (mediaFile.Type == Models.MediaType.Audio)
+        if (mediaFile.Type is Models.MediaType.Audio or Models.MediaType.Midi)
         {
             // Embedded cover art is not shown as video; the visualization (if any)
             // comes from the visualization LibVLC instance and is not affected
@@ -657,6 +708,19 @@ public class MediaPlayerController : IMediaPlayerController, IDisposable
             throw new ArgumentNullException(nameof(mediaFile));
 
         var version = Interlocked.Increment(ref _preloadVersion);
+        if (mediaFile.Type == Models.MediaType.Midi)
+        {
+            try
+            {
+                await PrepareMidiAsync(mediaFile);
+            }
+            catch (Exception ex)
+            {
+                // Like any failed preload: only logged, the song fails again in its turn
+                _loggingService?.LogWarning($"Failed to prepare '{mediaFile.Filename}': {ex.Message}");
+                return;
+            }
+        }
         await Task.Run(() => Preload(mediaFile, version));
     }
 

@@ -9,7 +9,8 @@ A professional karaoke and media player application for Windows with advanced fe
 ## Features
 
 ### Core Functionality
-- **Multi-Format Support**: Play MP4, MKV, WEBM video files and MP3 audio files
+- **Multi-Format Support**: Play MP4, MKV, WEBM video files, MP3 audio files and MIDI karaoke files (.kar, .mid)
+- **MIDI Karaoke**: .kar/.mid files are played with a built-in General MIDI synthesizer; their lyrics are shown on screen, filling syllable by syllable
 - **Smart Media Library**: Automatic directory scanning with metadata extraction and thumbnail generation
 - **Advanced Search**: Fast search across 30,000+ files with partial matching and search history
 - **Karaoke Queue**: the song playing is on top, finished songs leave the queue; add songs "next" or at the end, reorder, shuffle, play now; save/load playlists (M3U/M3U8)
@@ -89,7 +90,7 @@ For detailed documentation, see the [docs/](docs/) directory:
    - Type the path or browse to your karaoke/music folder
 
 2. **Initial Scan**: The application will scan your media directory
-   - Quick scan indexes all supported files (MP4, MKV, WEBM, MP3)
+   - Quick scan indexes all supported files (MP4, MKV, WEBM, MP3, KAR, MID)
    - Metadata and thumbnails are processed in the background
    - You can start using the app immediately while processing continues
 
@@ -244,7 +245,7 @@ Change style in Settings > Display > Audio Visualization Style (applies from the
 - Close other resource-intensive applications
 
 **Files not appearing in catalog**:
-- Verify files are in supported formats (MP4, MKV, WEBM, MP3)
+- Verify files are in supported formats (MP4, MKV, WEBM, MP3, KAR, MID)
 - Check file permissions
 - Use Refresh Library (`Ctrl+R`)
 

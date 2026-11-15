@@ -11,6 +11,14 @@ public static class FilenameParser
 {
     private static readonly Regex YouTubeIdSuffix = new(@"\s*\[[A-Za-z0-9_-]{11}\]$", RegexOptions.Compiled);
 
+    // Karaoke markers at the end of a name, which "Title (Artist)" would take for the
+    // artist: "Song (k)" and "Song [kar]" always; "Song (Karaoke)" only when there is no
+    // "Artist - Title" dash ("Artist - Song (Karaoke)" keeps it: it tells versions apart)
+    private static readonly Regex ShortKaraokeSuffix = new(
+        @"\s*[\(\[]\s*(k|kar)\s*[\)\]]\s*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex KaraokeSuffix = new(
+        @"\s*[\(\[]\s*karaoke(\s+version)?\s*[\)\]]\s*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     public static (string Artist, string Title) Parse(string filename)
     {
         if (string.IsNullOrWhiteSpace(filename))
@@ -20,6 +28,11 @@ public static class FilenameParser
 
         // Files downloaded from YouTube end with the video id: "Title [dQw4w9WgXcQ]"
         filename = YouTubeIdSuffix.Replace(filename, string.Empty);
+        var withoutMarker = ShortKaraokeSuffix.Replace(filename, string.Empty);
+        if (!withoutMarker.Contains('-'))
+            withoutMarker = KaraokeSuffix.Replace(withoutMarker, string.Empty);
+        if (withoutMarker.Trim().Length > 0)
+            filename = withoutMarker;
 
         // Pattern 1: "Artist - Title" (with space around dash)
         var match = Regex.Match(filename, @"^(.+?)\s+-\s+(.+)$");

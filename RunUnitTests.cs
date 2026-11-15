@@ -193,6 +193,23 @@ public static class RunUnitTests
             }
             totalTests++;
 
+            // Test 11: .kar/.mid files
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("TEST 11: MIDI Karaoke - Lyrics, Timing and Rendering");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            try
+            {
+                await MidiKaraokeTest.RunTests();
+                passedTests++;
+                Console.WriteLine("✓ MidiKaraoke tests PASSED\n");
+            }
+            catch (Exception ex)
+            {
+                failedTests++;
+                Console.WriteLine($"✗ MidiKaraoke tests FAILED: {ex.Message}\n");
+            }
+            totalTests++;
+
             // Summary
             Console.WriteLine();
             Console.WriteLine("╔════════════════════════════════════════════════════════════╗");

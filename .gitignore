@@ -86,3 +86,6 @@ publish/
 # Code review reports: kept locally, not committed
 # (name: YYYY-MM-DD_<short hash reviewed>_<reviewer>-review.md)
 docs/reviews/
+
+# General MIDI SoundFont: downloaded by the build (see KaraokePlayer.csproj)
+SoundFonts/*.sf2

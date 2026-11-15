@@ -79,7 +79,9 @@ public class MediaFile : INotifyPropertyChanged
 public enum MediaType
 {
     Video,
-    Audio
+    Audio,
+    /// <summary>.mid/.kar: synthesized to audio, lyrics (when present) shown on screen</summary>
+    Midi
 }
 
 public enum MediaFormat
@@ -87,5 +89,7 @@ public enum MediaFormat
     MP4,
     MKV,
     WEBM,
-    MP3
+    MP3,
+    KAR,
+    MID
 }

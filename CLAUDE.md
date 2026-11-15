@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Karaoke Player is a Windows karaoke and media player built with .NET 10 and Avalonia UI. It plays video (MP4, MKV, WEBM) and audio (MP3) files from a media folder, with a karaoke-style queue, crossfade, music-reactive visualizations for audio, single/dual-screen modes, and it is meant for large libraries (30,000+ files).
+Karaoke Player is a Windows karaoke and media player built with .NET 10 and Avalonia UI. It plays video (MP4, MKV, WEBM), audio (MP3) and MIDI karaoke (.kar, .mid) files from a media folder, with a karaoke-style queue, crossfade, music-reactive visualizations for audio, single/dual-screen modes, and it is meant for large libraries (30,000+ files).
 
 **Technology Stack:**
 - Framework: .NET 10 (C#), self-contained publish for win-x64
@@ -13,6 +13,7 @@ Karaoke Player is a Windows karaoke and media player built with .NET 10 and Aval
 - Database: SQLite with Entity Framework Core 10
 - Images: SkiaSharp 3 (thumbnails)
 - Metadata: TagLib# (audio and video containers; falls back to file-name parsing)
+- MIDI: MeltySynth (C# SoundFont synthesizer) with the GeneralUser GS SoundFont
 
 ## Build and Development Commands
 
@@ -70,6 +71,14 @@ Karaoke queue: `CurrentPlaylist[0]` is the song playing (while `CurrentSong != n
 ### Library
 
 `MediaLibraryManager` scans/monitors the folder and raises `FilesAdded/Removed/Modified`. Scans, `AddFileAsync` and renames are serialized by one lock. Folders that cannot be read are skipped and their songs kept (`SkippedFolders`, ids are referenced by the saved playlist). Watcher events (files, folders, overflow) trigger a debounced incremental rescan; only media-file renames are applied directly (keeping the id). A file whose timestamp changed gets `MetadataLoaded/ThumbnailLoaded = false` in the database; `MetadataExtractor` and `ThumbnailGenerator` process queues in the background and raise events; the ViewModel updates every instance of the file (`MediaFile` implements `INotifyPropertyChanged` via `NotifyChanged()`). Thumbnails are decoded off-screen with LibVLC video callbacks and saved with SkiaSharp; `ThumbnailConverter` turns the path into a bitmap. `MediaFile.DisplayArtist/DisplayTitle/DisplayName` fall back to `FilenameParser` when metadata is missing.
+
+### MIDI karaoke (`Services/Midi/`)
+
+- `.kar`/`.mid`/`.midi` are `MediaType.Midi` (formats `KAR`, `MID`). `MidiRenderer` synthesizes them with MeltySynth into a WAV in `AppPaths.Cache/midi` (key: path, size, time, SoundFont; least recently used deleted above ~2 GB) and LibVLC plays the WAV like any audio file, so crossfade, volume, normalization and the audio device need nothing special. `MediaPlayerController` renders before creating the media (`PlayAsync`, `PreloadNextAsync`: a few seconds the first time) and keeps the MIDI path → WAV map that `CreateMedia` uses; a Play/Stop meanwhile makes the waiting play stale (`_playVersion`). MIDI songs never use the visualization player.
+- SoundFont: `SoundFonts/GeneralUser-GS.sf2` is not in git; the build downloads it once from a pinned commit (hash checked) and copies it next to the app; a `.sf2` in `<data>/SoundFonts` takes precedence.
+- `MidiKaraokeFile` (own parser) reads lyrics, `@T` header lines and the length. Two conventions: Soft Karaoke Text events (`/` new line, `\` new paragraph, `@` header lines), or Lyric events with CR/LF line ends (then `/` is plain text and Text events are chords). Text is Windows-1252 unless valid UTF-8; fewer than 10 syllables = no lyrics; copyright and "CHn:" channel-list lines are dropped. Real files are often damaged: the parser keeps what it could read.
+- `Views/LyricsView` draws the lyrics (main and playback window, `ShowLyrics`): previous line dimmed, current line filling syllable by syllable (time interpolated between player updates), next two lines; after a pause the next line with countdown dots. A MIDI without lyrics shows the "now playing" panel.
+- Metadata: artist/title from the file name (`FilenameParser` drops "(k)"-style markers); the first `@T` line is the title only when the name gives no artist.
 
 ### YouTube downloads (`Services/YouTubeService.cs`, `ViewModels/MainWindowViewModel.YouTube.cs`)
 

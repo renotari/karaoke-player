@@ -21,7 +21,7 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
     public string? MonitoredDirectory => _monitoredDirectory;
     private readonly HashSet<string> _supportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".mp4", ".mkv", ".webm", ".mp3"
+        ".mp4", ".mkv", ".webm", ".mp3", ".kar", ".mid", ".midi"
     };
 
     public event EventHandler<MediaFilesChangedEventArgs>? FilesAdded;
@@ -307,10 +307,17 @@ public class MediaLibraryManager : IMediaLibraryManager, IDisposable
             ".mkv" => MediaFormat.MKV,
             ".webm" => MediaFormat.WEBM,
             ".mp3" => MediaFormat.MP3,
+            ".kar" => MediaFormat.KAR,
+            ".mid" or ".midi" => MediaFormat.MID,
             _ => throw new NotSupportedException($"Unsupported file format: {extension}")
         };
 
-        var type = extension == ".mp3" ? MediaType.Audio : MediaType.Video;
+        var type = format switch
+        {
+            MediaFormat.MP3 => MediaType.Audio,
+            MediaFormat.KAR or MediaFormat.MID => MediaType.Midi,
+            _ => MediaType.Video
+        };
 
         return new MediaFile
         {

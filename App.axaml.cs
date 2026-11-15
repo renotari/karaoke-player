@@ -202,7 +202,11 @@ public partial class App : Application
         Step("video player (LibVLC)", () =>
         {
             Core.Initialize();
-            _mediaPlayerController = new MediaPlayerController(_loggingService);
+            _mediaPlayerController = new MediaPlayerController(_loggingService)
+            {
+                // .mid/.kar are synthesized to WAV files kept in the cache
+                MidiRenderer = new Services.Midi.MidiRenderer(Path.Combine(AppPaths.Cache, "midi"), _loggingService)
+            };
 
             // Create LibVLC instance for thumbnail generator
             if (_dbContextFactory != null)

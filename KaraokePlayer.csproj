@@ -51,15 +51,38 @@
 
   <!-- The LibVLC package collects its files before the build: run it for publish too,
        or a publish with the no-build option leaves libvlc out (the installed app cannot play). -->
-  <Target Name="CollectVlcFilesForPublish"
-          Condition="'$(IsWindowsTarget)' == 'true'"
-          BeforeTargets="AssignTargetPaths"
-          DependsOnTargets="CollectVlcFilesToCopyWindows" />
+  <Target Name="CollectVlcFilesForPublish" Condition="'$(IsWindowsTarget)' == 'true'" BeforeTargets="AssignTargetPaths" DependsOnTargets="CollectVlcFilesToCopyWindows" />
 
   <!-- Never produce a Windows package without LibVLC -->
   <Target Name="VerifyLibVlcPublished" Condition="'$(IsWindowsTarget)' == 'true'" AfterTargets="Publish">
-    <Error Condition="!Exists('$(PublishDir)libvlc\win-x64\libvlc.dll')"
-           Text="LibVLC missing from the publish folder ($(PublishDir)libvlc\win-x64\libvlc.dll): the installed app could not play media." />
+    <Error Condition="!Exists('$(PublishDir)libvlc\win-x64\libvlc.dll')" Text="LibVLC missing from the publish folder ($(PublishDir)libvlc\win-x64\libvlc.dll): the installed app could not play media." />
+  </Target>
+
+  <!-- General MIDI SoundFont for .mid/.kar files: GeneralUser GS v2.0.3 by S. Christian Collins
+       (free to use and redistribute in software: SoundFonts/GeneralUser-GS-LICENSE.txt).
+       32 MB, so not in git: the build downloads it once from a pinned commit of the
+       author's GitHub repository, checks it, and copies it next to the app. -->
+  <PropertyGroup>
+    <SoundFontDir>$(MSBuildProjectDirectory)/SoundFonts</SoundFontDir>
+    <SoundFontUrl>https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/97049183643d5fc5a9322a69c5b09efb667c6c3a/GeneralUser-GS.sf2</SoundFontUrl>
+    <SoundFontSha256>9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe</SoundFontSha256>
+  </PropertyGroup>
+
+  <Target Name="DownloadSoundFont" BeforeTargets="AssignTargetPaths">
+    <DownloadFile Condition="!Exists('$(SoundFontDir)/GeneralUser-GS.sf2')" SourceUrl="$(SoundFontUrl)" DestinationFolder="$(SoundFontDir)" Retries="2" />
+    <VerifyFileHash File="$(SoundFontDir)/GeneralUser-GS.sf2" Hash="$(SoundFontSha256)" Algorithm="SHA256" />
+    <!-- Added here (not statically): on the first build the file did not exist yet -->
+    <ItemGroup>
+      <None Include="SoundFonts/GeneralUser-GS.sf2" Link="SoundFonts/GeneralUser-GS.sf2"
+            CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <None Include="SoundFonts/GeneralUser-GS-LICENSE.txt" Link="SoundFonts/GeneralUser-GS-LICENSE.txt"
+            CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Never produce a package that cannot play MIDI files -->
+  <Target Name="VerifySoundFontPublished" AfterTargets="Publish">
+    <Error Condition="!Exists('$(PublishDir)SoundFonts/GeneralUser-GS.sf2')" Text="SoundFont missing from the publish folder: .mid/.kar files could not be played." />
   </Target>
 
   <ItemGroup>
@@ -75,6 +98,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
     <PackageReference Include="LibVLCSharp" Version="3.9.4" />
     <PackageReference Include="LibVLCSharp.Avalonia" Version="3.9.4" />
+    <PackageReference Include="MeltySynth" Version="2.4.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

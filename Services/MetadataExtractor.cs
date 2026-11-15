@@ -83,6 +83,36 @@ public class MetadataExtractor : IMetadataExtractor, IDisposable
     }
 
     /// <summary>
+    /// .mid/.kar: length from the MIDI file; artist and title from the file name
+    /// (the "@T" lines of old .kar files are often missing or garbled), except the
+    /// title when the name gives no artist ("totaleclipse.kar" → "@TTotal Eclipse of the Heart").
+    /// </summary>
+    public static MediaMetadata ExtractMidiMetadata(MediaFile mediaFile)
+    {
+        var metadata = new MediaMetadata { MediaFileId = mediaFile.Id };
+        var parsed = FilenameParser.ParseWithExtension(mediaFile.Filename);
+        metadata.Artist = parsed.Artist;
+        metadata.Title = parsed.Title;
+
+        try
+        {
+            metadata.FileSize = new FileInfo(mediaFile.FilePath).Length;
+            var midi = Midi.MidiKaraokeFile.Load(mediaFile.FilePath);
+            metadata.Duration = midi.Duration;
+            if (string.IsNullOrWhiteSpace(parsed.Artist) && midi.TitleLines.Count > 0
+                && !string.IsNullOrWhiteSpace(midi.TitleLines[0]))
+            {
+                metadata.Title = midi.TitleLines[0];
+            }
+        }
+        catch (Exception)
+        {
+            // Damaged file: the name is enough to list it (playing it will report the error)
+        }
+        return metadata;
+    }
+
+    /// <summary>
     /// Extracts metadata from an audio file (MP3) using TagLib#
     /// </summary>
     public async Task<MediaMetadata> ExtractAudioMetadataAsync(MediaFile mediaFile)
@@ -212,6 +242,10 @@ public class MetadataExtractor : IMetadataExtractor, IDisposable
                     if (mediaFile.Type == MediaType.Video)
                     {
                         metadata = await ExtractVideoMetadataAsync(mediaFile);
+                    }
+                    else if (mediaFile.Type == MediaType.Midi)
+                    {
+                        metadata = await Task.Run(() => ExtractMidiMetadata(mediaFile));
                     }
                     else
                     {

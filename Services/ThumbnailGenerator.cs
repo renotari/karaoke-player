@@ -295,7 +295,7 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
     /// </summary>
     public string CreateDefaultThumbnail(Models.MediaType mediaType)
     {
-        var placeholderName = mediaType == Models.MediaType.Video ? "video_placeholder.png" : "audio_placeholder.png";
+        var placeholderName = $"{mediaType.ToString().ToLowerInvariant()}_placeholder.png";
         var placeholderPath = Path.Combine(_cacheDirectory, placeholderName);
 
         // Check if placeholder already exists
@@ -323,7 +323,12 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
             Size = 24
         };
 
-        var text = mediaType == Models.MediaType.Video ? "VIDEO" : "AUDIO";
+        var text = mediaType switch
+        {
+            Models.MediaType.Video => "VIDEO",
+            Models.MediaType.Midi => "MIDI",
+            _ => "AUDIO"
+        };
         var x = ThumbnailWidth / 2f;
         var y = ThumbnailHeight / 2f + 8;
 
@@ -397,6 +402,10 @@ public class ThumbnailGenerator : IThumbnailGenerator, IDisposable
                     if (mediaFile.Type == Models.MediaType.Video)
                     {
                         thumbnailPath = await GenerateVideoThumbnailAsync(mediaFile);
+                    }
+                    else if (mediaFile.Type == Models.MediaType.Midi)
+                    {
+                        thumbnailPath = CreateDefaultThumbnail(Models.MediaType.Midi);
                     }
                     else if (mediaFile.Type == Models.MediaType.Audio)
                     {

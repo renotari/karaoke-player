@@ -202,7 +202,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         UpdateCurrentSongInfo();
         OnPropertyChanged(nameof(IsVideoContent));
         OnPropertyChanged(nameof(IsAudioContent));
+        OnPropertyChanged(nameof(IsMidiContent));
         OnPropertyChanged(nameof(IsIdle));
+        LoadLyrics(value);
         UpdateActiveVideoSurface();
         OnPropertyChanged(nameof(IsVideoSurfaceAVisible));
         OnPropertyChanged(nameof(IsVideoSurfaceBVisible));
@@ -221,8 +223,39 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>True while an audio file is the current song (the "now playing" panel is shown).</summary>
     public bool IsAudioContent => CurrentSong?.Type == MediaType.Audio;
 
+    /// <summary>True while a .mid/.kar file is the current song.</summary>
+    public bool IsMidiContent => CurrentSong?.Type == MediaType.Midi;
+
     /// <summary>True when nothing is playing (the waiting screen is shown).</summary>
     public bool IsIdle => CurrentSong == null;
+
+    /// <summary>Lyrics of the current .kar/.mid (null for other songs or while loading).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowLyrics), nameof(ShowAudioInfoPanel))]
+    private Services.Midi.KaraokeLyrics? _currentLyrics;
+
+    /// <summary>The lyrics screen replaces the "now playing" panel for MIDI files with lyrics.</summary>
+    public bool ShowLyrics => IsMidiContent && CurrentLyrics?.HasLyrics == true;
+
+    private void LoadLyrics(MediaFile? song)
+    {
+        CurrentLyrics = null;
+        if (song?.Type != MediaType.Midi)
+            return;
+
+        Task.Run(() => Services.Midi.MidiKaraokeFile.Load(song.FilePath).Lyrics).ContinueWith(task => OnUiThread(() =>
+        {
+            if (CurrentSong?.Id != song.Id)
+                return; // another song started meanwhile
+            if (task.IsCompletedSuccessfully)
+                CurrentLyrics = task.Result;
+            else
+            {
+                CurrentLyrics = Services.Midi.KaraokeLyrics.Empty;
+                App.Current?.LoggingService?.LogWarning($"Cannot read the lyrics of {song.Filename}: {task.Exception?.GetBaseException().Message}");
+            }
+        }), TaskScheduler.Default);
+    }
 
     // ----- Seek and subtitles ---------------------------------------------------
 
@@ -277,7 +310,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>The current song draws into a video surface (video, or audio with visualization).</summary>
     public bool HasVisualOutput => IsVideoContent || (IsAudioContent && AudioVisualizationEnabled);
 
-    public bool ShowAudioInfoPanel => IsAudioContent && !AudioVisualizationEnabled;
+    public bool ShowAudioInfoPanel => (IsAudioContent && !AudioVisualizationEnabled)
+        || (IsMidiContent && CurrentLyrics?.HasLyrics != true);
 
     /// <summary>Title strip under the visualization (nothing can be drawn over the video surface).</summary>
     public bool ShowAudioTitleStrip => IsAudioContent && AudioVisualizationEnabled;

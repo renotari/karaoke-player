@@ -330,6 +330,13 @@
                                        HorizontalAlignment="Center"/>
                         </StackPanel>
 
+                        <!-- .kar/.mid with lyrics: karaoke text (no native surface is used) -->
+                        <views:LyricsView IsVisible="{Binding ShowLyrics}"
+                                          Lyrics="{Binding CurrentLyrics}"
+                                          Position="{Binding CurrentTime}"
+                                          IsPlaying="{Binding IsPlaying}"
+                                          Title="{Binding CurrentSong.DisplayName, FallbackValue=''}"/>
+
                         <!-- Dual screen: the video is on the playback window -->
                         <Border Background="Black" IsVisible="{Binding IsDualScreenMode}">
                             <StackPanel HorizontalAlignment="Center"

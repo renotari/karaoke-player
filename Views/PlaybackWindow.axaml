@@ -58,6 +58,13 @@
                        HorizontalAlignment="Center"/>
         </StackPanel>
 
+        <!-- .kar/.mid with lyrics (see MainWindow) -->
+        <views:LyricsView IsVisible="{Binding ShowLyrics}"
+                          Lyrics="{Binding CurrentLyrics}"
+                          Position="{Binding CurrentTime}"
+                          IsPlaying="{Binding IsPlaying}"
+                          Title="{Binding CurrentSong.DisplayName, FallbackValue=''}"/>
+
         <!-- Video surfaces, one per player (see MainWindow) -->
         <views:EmbeddedVideoView x:Name="VideoViewA" IsVisible="{Binding IsVideoSurfaceAActive}"/>
         <views:EmbeddedVideoView x:Name="VideoViewB" IsVisible="{Binding IsVideoSurfaceBActive}"/>
