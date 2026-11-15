@@ -126,6 +126,13 @@ public static class MidiKaraokeTest
         Check(!l2.Any(l => l.Text.Contains("CH1") || l.Text.Contains("C# m")), "channel list and chords are not lyrics");
         Check(Near(l2[0].Start, 0.5) && l2.Count == 2, "lyric events timed, one line per CR");
 
+        // ----- Every syllable followed by its line end in the same event -----
+        var crEnded = new Track().Tempo(0, 500000);
+        for (var i = 0; i < 12; i++) crEnded.Lyric(48, $"Riga {i}\r");
+        var crFile = MidiKaraokeFile.Parse(Midi(96, crEnded));
+        Check(crFile.Lyrics.Lines.Count == 12 && crFile.Lyrics.Lines[3].Text == "Riga 3",
+            "text ending with CR in the same event counts as lyrics (Codex review 9c9231d, P2 #1)");
+
         // ----- Plain MIDI: a marker or two is not lyrics -----
         var plain = MidiKaraokeFile.Parse(Midi(96, new Track().Text(0, "stop").Event(0, 0x90, 60, 100).Event(960, 0x80, 60, 0)));
         Check(!plain.Lyrics.HasLyrics && Near(plain.Duration, 5.0), "MIDI without lyrics");
@@ -177,6 +184,25 @@ public static class MidiKaraokeTest
             File.SetLastWriteTimeUtc(midiPath, DateTime.UtcNow.AddMinutes(1));
             var changed = await renderer.GetAudioFileAsync(midiPath);
             Check(changed != both[0], "a modified file is rendered again");
+
+            // A SoundFont put in the data folder wins; replacing it (same name) renders again
+            var userFonts = Path.Combine(AppPaths.Root, "SoundFonts");
+            Directory.CreateDirectory(userFonts);
+            var userFont = Path.Combine(userFonts, "GeneralUser-GS.sf2");
+            File.Copy(MidiRenderer.FindSoundFont()!, userFont, overwrite: true);
+            try
+            {
+                Check(MidiRenderer.FindSoundFont() == userFont, "the user's SoundFont is preferred");
+                var withUserFont = await renderer.GetAudioFileAsync(midiPath);
+                File.SetLastWriteTimeUtc(userFont, DateTime.UtcNow.AddMinutes(5));
+                var replaced = await renderer.GetAudioFileAsync(midiPath);
+                Check(withUserFont != changed && replaced != withUserFont,
+                    "another or replaced SoundFont renders again (Codex review 9c9231d, P2 #2)");
+            }
+            finally
+            {
+                File.Delete(userFont);
+            }
         }
         finally
         {

@@ -237,7 +237,12 @@ public sealed class MidiKaraokeFile
             {
                 if (c is '\r' or '\n' || (slashBreaks && c is '/' or '\\'))
                 {
-                    if (piece.Length > 0) { current.Add(new LyricSyllable(time, piece.ToString())); piece.Clear(); }
+                    if (piece.Length > 0)
+                    {
+                        current.Add(new LyricSyllable(time, piece.ToString()));
+                        piece.Clear();
+                        syllableCount++;
+                    }
                     EndLine(c is '\\' or '\n');
                 }
                 else if (!char.IsControl(c))

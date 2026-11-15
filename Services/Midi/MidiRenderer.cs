@@ -27,7 +27,7 @@ public sealed class MidiRenderer
     private readonly ConcurrentDictionary<string, Lazy<Task<string>>> _renders = new();
     private readonly object _soundFontLock = new();
     private SoundFont? _soundFont;
-    private string? _soundFontPath;
+    private string? _soundFontIdentity; // path, size and time of the loaded SoundFont
 
     public MidiRenderer(string cacheDirectory, ILoggingService? logging = null)
     {
@@ -129,10 +129,12 @@ public sealed class MidiRenderer
         // Loading takes a moment and the SoundFont is read-only: shared by all renders
         lock (_soundFontLock)
         {
-            if (_soundFont == null || _soundFontPath != path)
+            // Reloaded when another SoundFont is chosen or the file is replaced
+            var identity = FileIdentity(path);
+            if (_soundFont == null || _soundFontIdentity != identity)
             {
                 _soundFont = new SoundFont(path);
-                _soundFontPath = path;
+                _soundFontIdentity = identity;
             }
             return _soundFont;
         }
@@ -163,12 +165,20 @@ public sealed class MidiRenderer
         w.Write(dataBytes);
     }
 
-    /// <summary>Changes to the MIDI file (time, size) or another SoundFont make a new render.</summary>
+    /// <summary>
+    /// A change to the MIDI file or to the SoundFont (another file, or the same name
+    /// replaced) makes a new render.
+    /// </summary>
     private static string CacheKey(string midiPath, string soundFontPath)
     {
-        var info = new FileInfo(midiPath);
-        var key = $"{Path.GetFullPath(midiPath)}|{info.Length}|{info.LastWriteTimeUtc.Ticks}|{Path.GetFileName(soundFontPath)}";
+        var key = $"{FileIdentity(midiPath)}|{FileIdentity(soundFontPath)}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..24].ToLowerInvariant();
+    }
+
+    private static string FileIdentity(string path)
+    {
+        var info = new FileInfo(path);
+        return $"{Path.GetFullPath(path)}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
     }
 
     private static void Touch(string path)
