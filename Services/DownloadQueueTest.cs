@@ -44,7 +44,48 @@ public static class DownloadQueueTest
             await Task.Delay(10);
     }
 
-    public static async Task RunTests()
+    /// <summary>
+    /// In the app the queue code runs on the UI thread only: run the test the same way
+    /// (on the thread pool its continuations would change the lists concurrently).
+    /// </summary>
+    public static Task RunTests() => Task.Run(() => SingleThreadContext.Run(RunCoreAsync));
+
+    private sealed class SingleThreadContext : SynchronizationContext
+    {
+        private readonly System.Collections.Concurrent.BlockingCollection<(SendOrPostCallback, object?)> _queue = new();
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            // The ViewModel keeps this context (throttled search): after the test, run elsewhere
+            if (!_queue.IsAddingCompleted)
+            {
+                try { _queue.Add((d, state)); return; }
+                catch (InvalidOperationException) { }
+            }
+            ThreadPool.QueueUserWorkItem(_ => d(state));
+        }
+
+        public static void Run(Func<Task> body)
+        {
+            var previous = Current;
+            var context = new SingleThreadContext();
+            SetSynchronizationContext(context);
+            try
+            {
+                var task = body();
+                task.ContinueWith(_ => context._queue.CompleteAdding(), TaskScheduler.Default);
+                foreach (var (callback, state) in context._queue.GetConsumingEnumerable())
+                    callback(state);
+                task.GetAwaiter().GetResult();
+            }
+            finally
+            {
+                SetSynchronizationContext(previous);
+            }
+        }
+    }
+
+    private static async Task RunCoreAsync()
     {
         var dir = Path.Combine(Path.GetTempPath(), "dlqueue-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
