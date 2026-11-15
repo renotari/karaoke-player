@@ -125,6 +125,7 @@
                 <MenuItem Header="_Open Media Directory..." Command="{Binding OpenMediaDirectoryCommand}" />
                 <MenuItem Header="_Refresh Library" Command="{Binding RefreshLibraryCommand}" InputGesture="Ctrl+R" />
                 <MenuItem Header="Download from _YouTube..." Command="{Binding OpenYouTubeCommand}" InputGesture="Ctrl+T" />
+                <MenuItem Header="P_opular Songs..." Command="{Binding OpenPopularSongsCommand}" />
                 <Separator />
                 <MenuItem Header="Playlist _Composer..." Command="{Binding OpenPlaylistComposerCommand}" InputGesture="Ctrl+P" />
                 <MenuItem Header="_Edit Current Playlist..." Command="{Binding EditPlaylistInComposerCommand}" />

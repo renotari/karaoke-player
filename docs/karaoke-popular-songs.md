@@ -1,6 +1,6 @@
 # Popular karaoke songs (list)
 
-`karaoke-popular-songs.csv`: 255 songs most sung at karaoke, compiled on 2026-11-15 from
+`Assets/karaoke-popular-songs.csv` (shipped with the app, used by File > Popular Songs): 255 songs most sung at karaoke, compiled on 2026-11-15 from
 three charts based on what people actually sing in karaoke apps (not on streaming or
 editorial picks). It opens in Excel/LibreOffice (UTF-8, comma separated).
 

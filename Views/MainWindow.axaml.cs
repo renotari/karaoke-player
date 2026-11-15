@@ -23,6 +23,8 @@ public partial class MainWindow : Window
     private IDisposable? _exitApplicationSubscription;
     private IDisposable? _youTubeSubscription;
     private YouTubeWindow? _youTubeWindow;
+    private IDisposable? _popularSongsSubscription;
+    private PopularSongsWindow? _popularSongsWindow;
 
     public MainWindow()
     {
@@ -62,6 +64,9 @@ public partial class MainWindow : Window
 
         _exitApplicationSubscription = MessageBus.Current.Listen<ExitApplicationMessage>()
             .Subscribe(_ => Close());
+
+        _popularSongsSubscription = MessageBus.Current.Listen<OpenPopularSongsMessage>()
+            .Subscribe(_ => Avalonia.Threading.Dispatcher.UIThread.Post(OpenPopularSongs));
 
         _youTubeSubscription = MessageBus.Current.Listen<OpenYouTubeMessage>()
             .Subscribe(message => Avalonia.Threading.Dispatcher.UIThread.Post(() => OpenYouTube(message.Query)));
@@ -189,6 +194,29 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ReportError("Error opening YouTube window", ex.Message, ex);
+        }
+    }
+
+    /// <summary>Opens the Popular Songs window (not modal, one at a time).</summary>
+    private void OpenPopularSongs()
+    {
+        try
+        {
+            if (DataContext is not MainWindowViewModel vm)
+                return;
+            if (_popularSongsWindow != null)
+            {
+                _popularSongsWindow.Activate();
+                return;
+            }
+
+            _popularSongsWindow = new PopularSongsWindow { DataContext = new PopularSongsViewModel(vm) };
+            _popularSongsWindow.Closed += (_, _) => _popularSongsWindow = null;
+            _popularSongsWindow.Show(this);
+        }
+        catch (Exception ex)
+        {
+            ReportError("Error opening the popular songs", ex.Message, ex);
         }
     }
 
@@ -484,5 +512,6 @@ public partial class MainWindow : Window
         _showAboutSubscription?.Dispose();
         _exitApplicationSubscription?.Dispose();
         _youTubeSubscription?.Dispose();
+        _popularSongsSubscription?.Dispose();
     }
 }

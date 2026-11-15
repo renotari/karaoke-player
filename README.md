@@ -10,6 +10,7 @@ A professional karaoke and media player application for Windows with advanced fe
 
 ### Core Functionality
 - **Multi-Format Support**: Play MP4, MKV, WEBM video files, MP3 audio files and MIDI karaoke files (.kar, .mid)
+- **Popular Songs**: the 255 most sung karaoke songs (KaraFun and Singa charts) compared with your library: queue the ones you have, look for the missing ones on YouTube
 - **MIDI Karaoke**: .kar/.mid files are played with a built-in General MIDI synthesizer; their lyrics are shown on screen, filling syllable by syllable
 - **Smart Media Library**: Automatic directory scanning with metadata extraction and thumbnail generation
 - **Advanced Search**: Fast search across 30,000+ files with partial matching and search history

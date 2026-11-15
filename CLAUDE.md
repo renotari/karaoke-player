@@ -88,6 +88,10 @@ Karaoke queue: `CurrentPlaylist[0]` is the song playing (while `CurrentSong != n
 - A finished file is added with `MediaLibraryManager.AddFileAsync` (shared with the watcher, returns the existing entry if the watcher got there first) and queued at the end. One download at a time, the others wait in a queue in the order requested ("Clear queue" cancels the waiting ones, the one in progress goes on); downloads live in `MainWindowViewModel.Downloads` and survive closing the (non-modal) `YouTubeWindow`; they are cancelled on exit (the yt-dlp process is killed).
 - Settings: `YouTubeMaxHeight` (`[NotMapped]`), Settings > YouTube tab. Shortcut `OpenYouTube` (Ctrl+T: Ctrl+Y is redo in text boxes, so it would not work from the search box).
 
+### Popular songs (`Services/PopularSongs.cs`, `PopularSongsWindow`)
+
+File > Popular Songs: `Assets/karaoke-popular-songs.csv` (255 most sung karaoke songs, sources in `docs/karaoke-popular-songs.md`, shipped as an Avalonia asset) compared with the library off the UI thread. Names are compared without spaces/accents/punctuation: the title must equal the library title or (5+ letters) be in the file name (a title in brackets counts too); one artist word must be in the file name or artist (traditional songs: exact title only; files without artist: exact title of 8+ letters). Best version first (video, audio, MIDI). Tabs: in the library (Next/End) and missing (opens the YouTube window searching "Artist Title"). Opera arias (`category` = `lirica`) hidden by default.
+
 ### Views
 
 - `MainWindow`: catalog, video area, playlist; Video Mode hides the side columns; in dual screen the center shows a panel instead of the video.

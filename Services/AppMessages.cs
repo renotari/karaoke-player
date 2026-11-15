@@ -13,6 +13,11 @@ public class OpenPlaylistComposerMessage
 /// <summary>Request to show the Properties dialog of a media file</summary>
 public record ShowMediaPropertiesMessage(KaraokePlayer.Models.MediaFile File);
 
+/// <summary>Request to open the Popular Songs window</summary>
+public class OpenPopularSongsMessage
+{
+}
+
 /// <summary>Request to open the Settings window</summary>
 public class OpenSettingsMessage
 {

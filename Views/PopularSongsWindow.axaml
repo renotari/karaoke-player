@@ -1,0 +1,99 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:KaraokePlayer.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="640"
+        x:Class="KaraokePlayer.Views.PopularSongsWindow"
+        x:DataType="vm:PopularSongsViewModel"
+        Title="Popular Karaoke Songs"
+        Width="760" Height="640"
+        MinWidth="560" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Icon="/Assets/avalonia-logo.ico">
+
+  <Design.DataContext>
+    <vm:PopularSongsViewModel />
+  </Design.DataContext>
+
+  <Grid RowDefinitions="Auto,Auto,*" Margin="12">
+
+    <!-- Filters -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12">
+      <TextBlock Text="Show" VerticalAlignment="Center"/>
+      <ComboBox SelectedIndex="{Binding LanguageFilter}" MinWidth="150">
+        <ComboBoxItem Content="All songs"/>
+        <ComboBoxItem Content="Italian songs"/>
+        <ComboBoxItem Content="Foreign songs"/>
+      </ComboBox>
+      <CheckBox Content="Hide opera arias" IsChecked="{Binding HideOpera}" VerticalAlignment="Center"/>
+      <Button Content="Refresh" Command="{Binding RefreshCommand}"
+              ToolTip.Tip="Compare again with the library (after adding songs)"/>
+    </StackPanel>
+
+    <!-- Summary -->
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,8">
+      <ProgressBar IsIndeterminate="True" Width="60" IsVisible="{Binding IsLoading}" VerticalAlignment="Center"/>
+      <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" FontSize="12"
+                 Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+    </StackPanel>
+
+    <TabControl Grid.Row="2">
+      <!-- Songs the library has: queue them -->
+      <TabItem Header="{Binding InLibraryHeader}">
+        <ListBox ItemsSource="{Binding InLibrary}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Grid ColumnDefinitions="40,*,Auto" Background="Transparent" ToolTip.Tip="{Binding Sources}">
+                <TextBlock Grid.Column="0" Text="{Binding Rank}" VerticalAlignment="Center"
+                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                  <TextBlock TextTrimming="CharacterEllipsis">
+                    <Run Text="{Binding Song.Title}" FontWeight="SemiBold"/>
+                    <Run Text=" – "/>
+                    <Run Text="{Binding Song.Artist}"/>
+                  </TextBlock>
+                  <TextBlock Text="{Binding FileInfo}" FontSize="11" TextTrimming="CharacterEllipsis"
+                             Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                  <Button Content="Next"
+                          ToolTip.Tip="Play after the current song"
+                          Command="{Binding $parent[ListBox].((vm:PopularSongsViewModel)DataContext).PlayNextCommand}"
+                          CommandParameter="{Binding}"/>
+                  <Button Content="End"
+                          ToolTip.Tip="Add to the end of the queue"
+                          Command="{Binding $parent[ListBox].((vm:PopularSongsViewModel)DataContext).AddToEndCommand}"
+                          CommandParameter="{Binding}"/>
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </TabItem>
+
+      <!-- Songs the library lacks: look for them on YouTube -->
+      <TabItem Header="{Binding MissingHeader}">
+        <ListBox ItemsSource="{Binding Missing}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Grid ColumnDefinitions="40,*,Auto" Background="Transparent" ToolTip.Tip="{Binding Sources}">
+                <TextBlock Grid.Column="0" Text="{Binding Rank}" VerticalAlignment="Center"
+                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0">
+                  <Run Text="{Binding Song.Title}" FontWeight="SemiBold"/>
+                  <Run Text=" – "/>
+                  <Run Text="{Binding Song.Artist}"/>
+                </TextBlock>
+                <Button Grid.Column="2" Content="Search on YouTube" VerticalAlignment="Center"
+                        ToolTip.Tip="Open the YouTube window searching this song"
+                        Command="{Binding $parent[ListBox].((vm:PopularSongsViewModel)DataContext).SearchYouTubeCommand}"
+                        CommandParameter="{Binding}"/>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </TabItem>
+    </TabControl>
+  </Grid>
+</Window>

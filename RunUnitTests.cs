@@ -210,6 +210,23 @@ public static class RunUnitTests
             }
             totalTests++;
 
+            // Test 12: Popular songs list and library matching
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("TEST 12: Popular Songs - List and Library Matching");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            try
+            {
+                await PopularSongsTest.RunTests();
+                passedTests++;
+                Console.WriteLine("✓ PopularSongs tests PASSED\n");
+            }
+            catch (Exception ex)
+            {
+                failedTests++;
+                Console.WriteLine($"✗ PopularSongs tests FAILED: {ex.Message}\n");
+            }
+            totalTests++;
+
             // Summary
             Console.WriteLine();
             Console.WriteLine("╔════════════════════════════════════════════════════════════╗");

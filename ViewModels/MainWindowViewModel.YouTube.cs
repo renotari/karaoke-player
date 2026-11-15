@@ -51,6 +51,13 @@ public partial class MainWindowViewModel
         ReactiveUI.MessageBus.Current.SendMessage(new OpenYouTubeMessage(SearchQuery));
     }
 
+    /// <summary>Opens the list of the most sung karaoke songs, compared with the library.</summary>
+    [RelayCommand]
+    public void OpenPopularSongs()
+    {
+        ReactiveUI.MessageBus.Current.SendMessage(new OpenPopularSongsMessage());
+    }
+
     public async Task DownloadFromYouTubeAsync(YouTubeVideo video)
     {
         if (YouTubeService == null)
