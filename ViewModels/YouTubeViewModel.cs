@@ -103,7 +103,9 @@ public partial class YouTubeViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    // The command lasts the whole download: without concurrent executions every
+    // Download button stayed disabled until it ended (no way to queue a second one)
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task Download(YouTubeResultViewModel? result)
     {
         if (result == null || _main == null)

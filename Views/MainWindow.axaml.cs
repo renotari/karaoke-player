@@ -183,7 +183,7 @@ public partial class MainWindow : Window
                             open.SearchCommand.Execute(null);
                     }
                 }
-                _youTubeWindow.Activate();
+                BringToFront(_youTubeWindow);
                 return;
             }
 
@@ -197,6 +197,14 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Shows a window already open: Activate alone leaves a minimized window minimized.</summary>
+    private static void BringToFront(Window window)
+    {
+        if (window.WindowState == WindowState.Minimized)
+            window.WindowState = WindowState.Normal;
+        window.Activate();
+    }
+
     /// <summary>Opens the Popular Songs window (not modal, one at a time).</summary>
     private void OpenPopularSongs()
     {
@@ -206,7 +214,7 @@ public partial class MainWindow : Window
                 return;
             if (_popularSongsWindow != null)
             {
-                _popularSongsWindow.Activate();
+                BringToFront(_popularSongsWindow);
                 return;
             }
 

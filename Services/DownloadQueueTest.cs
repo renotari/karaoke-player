@@ -124,6 +124,25 @@ public static class DownloadQueueTest
             fake.Gates["b"].SetResult();
             await tasks[1];
             Check(fake.Started.Count == 2 && vm.DownloadQueueSummary == string.Empty, "cleared downloads never started");
+
+            // From the YouTube window: the Download button stays usable during a download
+            var yt = new YouTubeViewModel(fake, vm, null);
+            var first = new YouTubeResultViewModel(new YouTubeVideo("e", "Song e", "Channel", 100));
+            var second = new YouTubeResultViewModel(new YouTubeVideo("f", "Song f", "Channel", 100));
+            fake.Gates["e"] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            fake.Gates["f"] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            yt.DownloadCommand.Execute(first);
+            await Until(() => fake.Started.Contains("e"));
+            Check(yt.DownloadCommand.CanExecute(second), "Download is enabled while another download runs (user report)");
+            yt.DownloadCommand.Execute(second);
+            await Until(() => vm.Downloads.Any(d => d.Video.Id == "f"));
+            Check(vm.Downloads.Any(d => d.Video.Id == "f" && d.State == YouTubeDownloadState.Queued),
+                "the second download waits in the queue");
+            fake.Gates["e"].SetResult();
+            await Until(() => fake.Started.Contains("f"));
+            fake.Gates["f"].SetResult();
+            await Until(() => !vm.Downloads.Any(d => d.IsActive));
+            Check(fake.Started.SkipWhile(id => id != "e").SequenceEqual(new[] { "e", "f" }), "both downloaded, in order");
         }
         finally
         {
