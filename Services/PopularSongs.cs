@@ -117,7 +117,8 @@ public static class PopularSongs
                 else
                     ok = e.Artist.Length == 0 && exactTitle && e.Title.Length >= 8; // file without artist
                 if (ok)
-                    files.Add((e.File, (exactTitle ? 10 : 0) + TypeQuality(e.File.Type)));
+                    // The kind of file first (video, audio, MIDI); an exact title only breaks ties
+                    files.Add((e.File, TypeQuality(e.File.Type) * 10 + (exactTitle ? 1 : 0)));
             }
 
             result.Add(new PopularSongMatch(song, files.OrderByDescending(x => x.Quality).Select(x => x.File).ToList()));

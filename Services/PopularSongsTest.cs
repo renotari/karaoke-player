@@ -65,6 +65,12 @@ public static class PopularSongsTest
         Check(Has(6, 7), "file without artist: exact long title");
         Check(Has(7, 9), "same title, other artist not taken (Buanne vs Morandi); case and accents ignored");
 
+        // A MIDI with the exact title does not come before a video with a messier name
+        var both = new[] { File("Toto Cutugno - L'Italiano.kar", MediaType.Midi), File("LItaliano-TotoCutugno.mp4") };
+        var order = PopularSongs.Match(songs, both)[0].Files;
+        Check(order.Count == 2 && order[0] == both[1],
+            "video before MIDI even when only the MIDI has the exact title (Codex review 86c3b67, P2)");
+
         // The list shipped with the app
         var shipped = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Assets", "karaoke-popular-songs.csv");
         if (!System.IO.File.Exists(shipped)) shipped = Path.Combine("Assets", "karaoke-popular-songs.csv");
