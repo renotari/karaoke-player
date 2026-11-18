@@ -114,12 +114,14 @@ public static class DownloadQueueTest
             await Until(() => fake.Started.Count == 2);
             Check(fake.Started.SequenceEqual(new[] { "a", "b" }), "next download starts in order");
             Check(vm.Downloads.First(d => d.Video.Id == "c").StatusText == "Waiting in queue (1st)", "queue places move up");
+            Check(vm.Downloads.Select(d => d.Video.Id).SequenceEqual(new[] { "b", "c", "d", "a" }),
+                "the download in progress on top, the finished ones at the bottom (user report)");
 
             // Clear queue: the waiting ones leave, the one in progress goes on
             vm.ClearDownloadQueue();
             await Task.WhenAll(tasks[2], tasks[3]);
-            Check(vm.Downloads.Select(d => d.Video.Id).SequenceEqual(new[] { "a", "b" }), "queued downloads removed from the list");
-            Check(vm.Downloads[1].IsDownloading && !vm.HasQueuedDownloads, "the download in progress is not stopped");
+            Check(vm.Downloads.Select(d => d.Video.Id).SequenceEqual(new[] { "b", "a" }), "queued downloads removed from the list");
+            Check(vm.Downloads[0].IsDownloading && !vm.HasQueuedDownloads, "the download in progress is not stopped");
 
             fake.Gates["b"].SetResult();
             await tasks[1];
@@ -140,6 +142,8 @@ public static class DownloadQueueTest
                 "the second download waits in the queue");
             fake.Gates["e"].SetResult();
             await Until(() => fake.Started.Contains("f"));
+            Check(vm.Downloads.Select(d => d.Video.Id).SequenceEqual(new[] { "f", "e", "b", "a" }),
+                "the next download goes on top, the latest finished first");
             fake.Gates["f"].SetResult();
             await Until(() => !vm.Downloads.Any(d => d.IsActive));
             Check(fake.Started.SkipWhile(id => id != "e").SequenceEqual(new[] { "e", "f" }), "both downloaded, in order");

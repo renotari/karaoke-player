@@ -83,7 +83,8 @@ public partial class MainWindowViewModel
 
         var item = new YouTubeDownloadViewModel(video);
         item.PropertyChanged += (_, _) => UpdateDownloadStatus();
-        Downloads.Add(item);
+        // Order: the download in progress, the waiting ones, then the finished ones (latest first)
+        Downloads.Insert(Downloads.Count(d => d.IsActive), item);
         UpdateDownloadStatus();
 
         var hasSlot = false;
@@ -94,6 +95,7 @@ public partial class MainWindowViewModel
             item.Token.ThrowIfCancellationRequested();
 
             item.Start();
+            MoveDownload(item, 0); // the download in progress on top
             await YouTubeService.EnsureToolsAsync(update: false,
                 new Progress<string>(text => item.StatusText = text), item.Token);
 
@@ -120,6 +122,8 @@ public partial class MainWindowViewModel
         {
             if (hasSlot)
                 _downloadSlot.Release();
+            // Finished: under the active ones
+            MoveDownload(item, Downloads.Count(d => d.IsActive));
             UpdateDownloadStatus();
         }
     }
@@ -157,6 +161,13 @@ public partial class MainWindowViewModel
     {
         foreach (var item in Downloads.Where(d => d.IsFinished).ToList())
             Downloads.Remove(item);
+    }
+
+    private void MoveDownload(YouTubeDownloadViewModel item, int index)
+    {
+        var from = Downloads.IndexOf(item);
+        if (from >= 0 && from != index && index < Downloads.Count)
+            Downloads.Move(from, index);
     }
 
     private void UpdateDownloadStatus()
