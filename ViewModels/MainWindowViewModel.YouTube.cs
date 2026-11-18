@@ -103,6 +103,8 @@ public partial class MainWindowViewModel
                 new Progress<YouTubeDownloadProgress>(item.Report), item.Token);
 
             item.Finish(YouTubeDownloadState.Completed, "Downloaded");
+            // Below the active ones now: a download added during the import goes after the waiting ones
+            MoveDownload(item, Downloads.Count(d => d.IsActive));
             await EnqueueDownloadedFileAsync(path, alreadyDownloaded: false);
         }
         catch (OperationCanceledException)
